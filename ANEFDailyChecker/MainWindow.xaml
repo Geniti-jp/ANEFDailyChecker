@@ -1,0 +1,48 @@
+﻿<Window x:Class="ANEFDailyChecker.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="ANEFDailyChecker"
+        Width="400"
+        Height="500">
+
+    <DockPanel Margin="10">
+
+        <!-- 上部 -->
+        <Grid DockPanel.Dock="Top">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition/>
+                <ColumnDefinition Width="Auto"/>
+                <ColumnDefinition Width="Auto"/>
+            </Grid.ColumnDefinitions>
+
+            <!-- 残り時間 -->
+            <TextBlock x:Name="RemainingText"
+                       VerticalAlignment="Center"/>
+
+            <!-- 再読込 -->
+            <Button Grid.Column="1"
+                    Content="再読込"
+                    Margin="0,0,5,0"
+                    Padding="10,2"
+                    Click="ReloadState"/>
+
+            <!-- 設定 -->
+            <Button Grid.Column="2"
+                    Content="設定"
+                    Padding="10,2"
+                    Click="OpenSettings"/>
+        </Grid>
+
+        <!-- チェックリスト -->
+        <ListBox x:Name="MemoList">
+            <ListBox.ItemTemplate>
+                <DataTemplate>
+                    <CheckBox IsChecked="{Binding IsChecked}">
+                        <TextBlock Text="{Binding Text}"/>
+                    </CheckBox>
+                </DataTemplate>
+            </ListBox.ItemTemplate>
+        </ListBox>
+
+    </DockPanel>
+</Window>
