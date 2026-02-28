@@ -89,7 +89,7 @@ public partial class MainWindow : Window
         var next = currentUpdateTime.AddDays(1);
         var remain = next - now;
 
-        RemainingText.Text = $"次回更新まで{remain.Hours}時間{remain.Minutes}分({_state.ResetTime:hh\\:mm}後更新)";
+        RemainingText.Text = $"次回更新まで{remain.Hours}時間{remain.Minutes}分({_state.ResetTime:hh\\:mm}更新)";
     }
 
     private DateTime GetCurrentUpdateTime(DateTime now)
