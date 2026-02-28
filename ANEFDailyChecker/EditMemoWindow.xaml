@@ -1,13 +1,15 @@
 ﻿<Window x:Class="ANEFDailyChecker.EditMemoWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Title="メモの編集" Width="350" Height="400" WindowStartupLocation="CenterOwner">
+        Title="メモの編集" Width="350" Height="500" WindowStartupLocation="CenterOwner">
     <Grid Margin="10">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
             <RowDefinition Height="Auto"/>
         </Grid.RowDefinitions>
 
@@ -33,6 +35,16 @@
             </ListBox.ContextMenu>
         </ListBox>
 
-        <Button Content="確定" Grid.Row="4" Margin="0,10,0,0" Height="30" Click="OkClick"/>
+        <Button x:Name="MoveUpButton" Content="↑ 上へ"
+                Grid.Row="4"
+                Margin="0,10,0,5"
+                Click="MoveChildUp"/>
+
+        <Button x:Name="MoveDownButton" Content="↓ 下へ"
+                Grid.Row="5"
+                Margin="0,0,0,10"
+                Click="MoveChildDown"/>
+
+        <Button Content="確定" Grid.Row="6" Height="30" Click="OkClick"/>
     </Grid>
 </Window>

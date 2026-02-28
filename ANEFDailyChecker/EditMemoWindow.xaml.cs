@@ -28,8 +28,12 @@ public partial class EditMemoWindow : Window
     private void RefreshVisibility()
     {
         var isGroup = GroupCheckBox.IsChecked ?? false;
-        ChildInputArea.Visibility = isGroup ? Visibility.Visible : Visibility.Collapsed;
-        ChildListBox.Visibility = isGroup ? Visibility.Visible : Visibility.Collapsed;
+
+        // 各要素の表示切り替え
+        if (ChildInputArea != null) ChildInputArea.Visibility = isGroup ? Visibility.Visible : Visibility.Collapsed;
+        if (ChildListBox != null) ChildListBox.Visibility = isGroup ? Visibility.Visible : Visibility.Collapsed;
+        if (MoveUpButton != null) MoveUpButton.Visibility = isGroup ? Visibility.Visible : Visibility.Collapsed;
+        if (MoveDownButton != null) MoveDownButton.Visibility = isGroup ? Visibility.Visible : Visibility.Collapsed;
     }
 
     private void AddChild(object sender, RoutedEventArgs e)
@@ -59,6 +63,30 @@ public partial class EditMemoWindow : Window
         if (ChildListBox.SelectedItem is MemoItem target)
         {
             _item.Children.Remove(target);
+        }
+    }
+
+    private void MoveChildUp(object sender, RoutedEventArgs e)
+    {
+        var i = ChildListBox.SelectedIndex;
+        if (i > 0)
+        {
+            var target = _item.Children[i];
+            _item.Children.RemoveAt(i);
+            _item.Children.Insert(i - 1, target);
+            ChildListBox.SelectedIndex = i - 1;
+        }
+    }
+
+    private void MoveChildDown(object sender, RoutedEventArgs e)
+    {
+        var i = ChildListBox.SelectedIndex;
+        if (i >= 0 && i < _item.Children.Count - 1)
+        {
+            var target = _item.Children[i];
+            _item.Children.RemoveAt(i);
+            _item.Children.Insert(i + 1, target);
+            ChildListBox.SelectedIndex = i + 1;
         }
     }
 
