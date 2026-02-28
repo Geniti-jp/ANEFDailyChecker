@@ -1,7 +1,9 @@
 ﻿using System.IO;
+using System.Text;
+using System.Text.Encodings.Web;
 using System.Text.Json;
+using System.Text.Unicode;
 using ANEFDailyChecker.Models;
-
 
 namespace ANEFDailyChecker.Services;
 
@@ -13,18 +15,24 @@ public class AppState
 
 public static class AppStateService
 {
-    private static readonly string FilePath =
-        Path.Combine(AppContext.BaseDirectory, "state.json");
+    private static readonly string FilePath = Path.Combine(AppContext.BaseDirectory, "state.json");
+
+    private static readonly JsonSerializerOptions Options = new()
+    {
+        WriteIndented = true,
+        Encoder = JavaScriptEncoder.Create(UnicodeRanges.All)
+    };
 
     public static AppState Load()
     {
         if (!File.Exists(FilePath)) return new AppState();
-        return JsonSerializer.Deserialize<AppState>(File.ReadAllText(FilePath))!;
+        string json = File.ReadAllText(FilePath, Encoding.UTF8);
+        return JsonSerializer.Deserialize<AppState>(json, Options) ?? new AppState();
     }
 
     public static void Save(AppState state)
     {
-        File.WriteAllText(FilePath,
-            JsonSerializer.Serialize(state, new JsonSerializerOptions { WriteIndented = true }));
+        string json = JsonSerializer.Serialize(state, Options);
+        File.WriteAllText(FilePath, json, new UTF8Encoding(false));
     }
 }

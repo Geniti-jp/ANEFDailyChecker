@@ -1,5 +1,4 @@
 ﻿using System.Windows;
-using Microsoft.VisualBasic;
 using ANEFDailyChecker.Models;
 using ANEFDailyChecker.Services;
 
@@ -32,16 +31,11 @@ public partial class SettingsWindow : Window
         var index = MemoList.SelectedIndex;
         if (index < 0) return;
 
-        var current = _state.Memos[index].Text;
+        var target = _state.Memos[index];
+        var editWin = new EditMemoWindow(target) { Owner = this };
 
-        var result = Interaction.InputBox(
-            "メモ内容を編集してください",
-            "編集",
-            current);
-
-        if (!string.IsNullOrWhiteSpace(result))
+        if (editWin.ShowDialog() == true)
         {
-            _state.Memos[index].Text = result;
             MemoList.Items.Refresh();
         }
     }
@@ -51,14 +45,7 @@ public partial class SettingsWindow : Window
         var index = MemoList.SelectedIndex;
         if (index < 0) return;
 
-        var text = _state.Memos[index].Text;
-
-        var result = MessageBox.Show(
-            $"以下のメモを削除しますか？\n\n{text}",
-            "確認",
-            MessageBoxButton.YesNo,
-            MessageBoxImage.Warning);
-
+        var result = MessageBox.Show($"「{_state.Memos[index].Text}」を削除しますか？", "確認", MessageBoxButton.YesNo, MessageBoxImage.Warning);
         if (result == MessageBoxResult.Yes)
         {
             _state.Memos.RemoveAt(index);
@@ -71,8 +58,7 @@ public partial class SettingsWindow : Window
         var i = MemoList.SelectedIndex;
         if (i > 0)
         {
-            (_state.Memos[i - 1], _state.Memos[i]) =
-            (_state.Memos[i], _state.Memos[i - 1]);
+            (_state.Memos[i - 1], _state.Memos[i]) = (_state.Memos[i], _state.Memos[i - 1]);
             MemoList.SelectedIndex = i - 1;
             MemoList.Items.Refresh();
         }
@@ -83,8 +69,7 @@ public partial class SettingsWindow : Window
         var i = MemoList.SelectedIndex;
         if (i >= 0 && i < _state.Memos.Count - 1)
         {
-            (_state.Memos[i + 1], _state.Memos[i]) =
-            (_state.Memos[i], _state.Memos[i + 1]);
+            (_state.Memos[i + 1], _state.Memos[i]) = (_state.Memos[i], _state.Memos[i + 1]);
             MemoList.SelectedIndex = i + 1;
             MemoList.Items.Refresh();
         }
@@ -92,9 +77,7 @@ public partial class SettingsWindow : Window
 
     protected override void OnClosed(EventArgs e)
     {
-        if (TimeSpan.TryParse(ResetTimeBox.Text, out var t))
-            _state.ResetTime = t;
-
+        if (TimeSpan.TryParse(ResetTimeBox.Text, out var t)) _state.ResetTime = t;
         AppStateService.Save(_state);
         base.OnClosed(e);
     }

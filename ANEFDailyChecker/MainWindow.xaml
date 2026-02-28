@@ -5,44 +5,97 @@
         Width="400"
         Height="500">
 
-    <DockPanel Margin="10">
+    <Window.Resources>
+        <Style TargetType="ListBoxItem">
+            <Setter Property="Padding" Value="0"/>
+            <Setter Property="Margin" Value="0"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="ListBoxItem">
+                        <ContentPresenter />
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
 
-        <!-- 上部 -->
-        <Grid DockPanel.Dock="Top">
+        <Style x:Key="ExpandButtonStyle" TargetType="ToggleButton">
+            <Setter Property="Width" Value="13"/>
+            <Setter Property="Height" Value="13"/>
+            <Setter Property="Padding" Value="0"/>
+            <Setter Property="Margin" Value="2,0,4,0"/>
+            <Setter Property="VerticalContentAlignment" Value="Center"/>
+            <Setter Property="HorizontalContentAlignment" Value="Center"/>
+            <Setter Property="FontSize" Value="9"/>
+            <Setter Property="Background" Value="White"/>
+            <Setter Property="Content" Value="＋"/>
+            <Style.Triggers>
+                <Trigger Property="IsChecked" Value="True">
+                    <Setter Property="Content" Value="−"/>
+                </Trigger>
+            </Style.Triggers>
+        </Style>
+    </Window.Resources>
+
+    <DockPanel Margin="10,5,10,10">
+        <Grid DockPanel.Dock="Top" Margin="0,0,0,3">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition/>
                 <ColumnDefinition Width="Auto"/>
                 <ColumnDefinition Width="Auto"/>
             </Grid.ColumnDefinitions>
-
-            <!-- 残り時間 -->
-            <TextBlock x:Name="RemainingText"
-                       VerticalAlignment="Center"/>
-
-            <!-- 再読込 -->
-            <Button Grid.Column="1"
-                    Content="再読込"
-                    Margin="0,0,5,0"
-                    Padding="10,2"
-                    Click="ReloadState"/>
-
-            <!-- 設定 -->
-            <Button Grid.Column="2"
-                    Content="設定"
-                    Padding="10,2"
-                    Click="OpenSettings"/>
+            <TextBlock x:Name="RemainingText" VerticalAlignment="Center" FontSize="12" Margin="2,0,0,0"/>
+            <Button Grid.Column="1" Content="再読込" Margin="0,0,5,0" Padding="8,1" Click="ReloadState"/>
+            <Button Grid.Column="2" Content="設定" Padding="8,1" Click="OpenSettings"/>
         </Grid>
 
-        <!-- チェックリスト -->
-        <ListBox x:Name="MemoList">
+        <ListBox x:Name="MemoList" HorizontalContentAlignment="Stretch" Padding="0" BorderThickness="1">
             <ListBox.ItemTemplate>
                 <DataTemplate>
-                    <CheckBox IsChecked="{Binding IsChecked}">
-                        <TextBlock Text="{Binding Text}"/>
-                    </CheckBox>
+                    <StackPanel Background="Transparent">
+                        <Grid Height="18">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="*"/>
+                            </Grid.ColumnDefinitions>
+
+                            <CheckBox Grid.Column="0" 
+                                      IsChecked="{Binding IsChecked, Mode=OneWay}" 
+                                      VerticalAlignment="Center"
+                                      PreviewMouseDown="ParentCheckPreview"
+                                      Margin="0"/>
+
+                            <ToggleButton x:Name="ExpandBtn" 
+                                          Grid.Column="1" 
+                                          Style="{StaticResource ExpandButtonStyle}"
+                                          VerticalAlignment="Center"
+                                          Visibility="{Binding IsGroup, Converter={StaticResource BooleanToVisibilityConverter}}"/>
+
+                            <TextBlock Grid.Column="2" 
+                                       Text="{Binding Text}" 
+                                       VerticalAlignment="Center"
+                                       FontSize="12"
+                                       Margin="0"/>
+                        </Grid>
+
+                        <ItemsControl ItemsSource="{Binding Children}" 
+                                      Margin="20,0,0,0"
+                                      Visibility="{Binding IsChecked, ElementName=ExpandBtn, Converter={StaticResource BooleanToVisibilityConverter}}">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate>
+                                    <Grid Height="18">
+                                        <CheckBox IsChecked="{Binding IsChecked}" 
+                                                  VerticalAlignment="Center" 
+                                                  Click="ChildCheckChanged">
+                                            <TextBlock Text="{Binding Text}" FontSize="12"/>
+                                        </CheckBox>
+                                    </Grid>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </StackPanel>
                 </DataTemplate>
             </ListBox.ItemTemplate>
         </ListBox>
-
     </DockPanel>
 </Window>
