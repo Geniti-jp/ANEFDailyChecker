@@ -12,24 +12,17 @@ public partial class EditMemoWindow : Window
     {
         InitializeComponent();
         _item = item;
-
         ParentTextBox.Text = item.Text;
         GroupCheckBox.IsChecked = item.IsGroup;
         ChildListBox.ItemsSource = item.Children;
-
         RefreshVisibility();
     }
 
-    private void GroupModeChanged(object sender, RoutedEventArgs e)
-    {
-        RefreshVisibility();
-    }
+    private void GroupModeChanged(object sender, RoutedEventArgs e) => RefreshVisibility();
 
     private void RefreshVisibility()
     {
         var isGroup = GroupCheckBox.IsChecked ?? false;
-
-        // 各要素の表示切り替え
         if (ChildInputArea != null) ChildInputArea.Visibility = isGroup ? Visibility.Visible : Visibility.Collapsed;
         if (ChildListBox != null) ChildListBox.Visibility = isGroup ? Visibility.Visible : Visibility.Collapsed;
         if (MoveUpButton != null) MoveUpButton.Visibility = isGroup ? Visibility.Visible : Visibility.Collapsed;
@@ -49,7 +42,7 @@ public partial class EditMemoWindow : Window
     {
         if (ChildListBox.SelectedItem is MemoItem target)
         {
-            var result = Interaction.InputBox("子要素の編集", "編集", target.Text);
+            string result = Interaction.InputBox("内容を編集", "編集", target.Text);
             if (!string.IsNullOrWhiteSpace(result))
             {
                 target.Text = result;
@@ -60,10 +53,7 @@ public partial class EditMemoWindow : Window
 
     private void DeleteChild(object sender, RoutedEventArgs e)
     {
-        if (ChildListBox.SelectedItem is MemoItem target)
-        {
-            _item.Children.Remove(target);
-        }
+        if (ChildListBox.SelectedItem is MemoItem target) _item.Children.Remove(target);
     }
 
     private void MoveChildUp(object sender, RoutedEventArgs e)
@@ -94,9 +84,6 @@ public partial class EditMemoWindow : Window
     {
         _item.Text = ParentTextBox.Text;
         _item.IsGroup = GroupCheckBox.IsChecked ?? false;
-        if (!_item.IsGroup) _item.Children.Clear();
-
         DialogResult = true;
-        Close();
     }
 }

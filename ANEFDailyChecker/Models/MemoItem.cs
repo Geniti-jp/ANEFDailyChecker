@@ -1,13 +1,14 @@
 ﻿using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.Runtime.CompilerServices;
+using System.Text.Json.Serialization;
 
 namespace ANEFDailyChecker.Models;
 
 public class MemoItem : INotifyPropertyChanged
 {
     private string _text = "";
-    private bool _isChecked;
+    private bool _isItemChecked;
     private bool _isGroup;
 
     public string Text
@@ -16,48 +17,55 @@ public class MemoItem : INotifyPropertyChanged
         set { _text = value; OnPropertyChanged(); }
     }
 
-    public bool IsChecked
+    /// <summary>
+    /// state.json に保存される実データ。
+    /// IsGroup が false の場合のみ、この値がチェック状態として使用される。
+    /// </summary>
+    public bool IsItemChecked
     {
-        get => _isChecked;
+        get => _isItemChecked;
         set
         {
-            if (IsGroup && Children.Count > 0)
+            if (_isItemChecked != value)
             {
-                var allChecked = Children.All(c => c.IsChecked);
-                if (_isChecked != allChecked)
-                {
-                    _isChecked = allChecked;
-                    OnPropertyChanged();
-                }
+                _isItemChecked = value;
+                OnPropertyChanged();
+                OnPropertyChanged(nameof(IsChecked));
             }
-            else
-            {
-                if (_isChecked != value)
-                {
-                    _isChecked = value;
-                    OnPropertyChanged();
-                }
-            }
+        }
+    }
+
+    /// <summary>
+    /// UI バインディング用。
+    /// グループの場合は子要素の状態から計算し、単体項目の場合は IsItemChecked を返す。
+    /// </summary>
+    [JsonIgnore]
+    public bool IsChecked
+    {
+        get => IsGroup ? (Children.Count > 0 && Children.All(c => c.IsChecked)) : IsItemChecked;
+        set
+        {
+            if (!IsGroup) IsItemChecked = value;
+            OnPropertyChanged();
         }
     }
 
     public bool IsGroup
     {
         get => _isGroup;
-        set { _isGroup = value; OnPropertyChanged(); }
+        set
+        {
+            _isGroup = value;
+            OnPropertyChanged();
+            OnPropertyChanged(nameof(IsChecked));
+        }
     }
 
     public ObservableCollection<MemoItem> Children { get; set; } = new();
 
     public void UpdateStatusFromChildren()
     {
-        if (!IsGroup) return;
-        var allChecked = Children.Count > 0 && Children.All(c => c.IsChecked);
-        if (_isChecked != allChecked)
-        {
-            _isChecked = allChecked;
-            OnPropertyChanged(nameof(IsChecked));
-        }
+        OnPropertyChanged(nameof(IsChecked));
     }
 
     public event PropertyChangedEventHandler? PropertyChanged;

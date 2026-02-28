@@ -20,14 +20,28 @@ public partial class MainWindow : Window
         _state = AppStateService.Load();
         MemoList.ItemsSource = _state.Memos;
         _lastKnownUpdateTime = GetCurrentUpdateTime(DateTime.Now);
+
         _timer.Interval = TimeSpan.FromSeconds(1);
         _timer.Tick += TimerTick;
         _timer.Start();
-        TimerTick(null, EventArgs.Empty);
+        UpdateRemainingDisplay();
+    }
+
+    private void ReloadClick(object sender, RoutedEventArgs e)
+    {
+        _state = AppStateService.Load();
+        MemoList.ItemsSource = _state.Memos;
+        UpdateRemainingDisplay();
+    }
+
+    private void ParentCheckChanged(object sender, RoutedEventArgs e)
+    {
+        AppStateService.Save(_state);
     }
 
     private void ParentCheckPreview(object sender, MouseButtonEventArgs e)
     {
+        // グループ項目の親チェックボックスは、子要素の状態によってのみ変化させる
         if (sender is CheckBox cb && cb.DataContext is MemoItem item && item.IsGroup)
         {
             e.Handled = true;
@@ -40,6 +54,7 @@ public partial class MainWindow : Window
         {
             var parent = FindParentMemoItem(cb);
             parent?.UpdateStatusFromChildren();
+            AppStateService.Save(_state);
         }
     }
 
@@ -53,32 +68,28 @@ public partial class MainWindow : Window
         return (parentDep as ListBoxItem)?.Content as MemoItem;
     }
 
-    private void ReloadState(object sender, RoutedEventArgs e)
+    private void TimerTick(object? sender, EventArgs e)
     {
         var now = DateTime.Now;
         var currentUpdateTime = GetCurrentUpdateTime(now);
+
+        UpdateRemainingDisplay();
+
         if (_lastKnownUpdateTime != currentUpdateTime)
         {
             ResetAllChecks();
             _lastKnownUpdateTime = currentUpdateTime;
         }
-        TimerTick(null, EventArgs.Empty);
     }
 
-    private void TimerTick(object? sender, EventArgs e)
+    private void UpdateRemainingDisplay()
     {
         var now = DateTime.Now;
         var currentUpdateTime = GetCurrentUpdateTime(now);
         var next = currentUpdateTime.AddDays(1);
         var remain = next - now;
 
-        RemainingText.Text = $"次回更新まで {remain.Hours}時間{remain.Minutes}分（{_state.ResetTime:hh\\:mm} 更新）";
-
-        if (_lastKnownUpdateTime != currentUpdateTime)
-        {
-            ResetAllChecks();
-            _lastKnownUpdateTime = currentUpdateTime;
-        }
+        RemainingText.Text = $"次回更新まで{remain.Hours}時間{remain.Minutes}分({_state.ResetTime:hh\\:mm}後更新)";
     }
 
     private DateTime GetCurrentUpdateTime(DateTime now)
@@ -92,8 +103,9 @@ public partial class MainWindow : Window
     {
         foreach (var m in _state.Memos)
         {
-            m.IsChecked = false;
-            foreach (var child in m.Children) child.IsChecked = false;
+            m.IsItemChecked = false;
+            foreach (var child in m.Children) child.IsItemChecked = false;
+            m.UpdateStatusFromChildren();
         }
         MemoList.Items.Refresh();
         AppStateService.Save(_state);

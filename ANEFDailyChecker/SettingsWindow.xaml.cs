@@ -28,37 +28,33 @@ public partial class SettingsWindow : Window
 
     private void EditMemo(object sender, RoutedEventArgs e)
     {
-        var index = MemoList.SelectedIndex;
-        if (index < 0) return;
-
-        var target = _state.Memos[index];
-        var editWin = new EditMemoWindow(target) { Owner = this };
-
-        if (editWin.ShowDialog() == true)
+        if (MemoList.SelectedItem is MemoItem target)
         {
-            MemoList.Items.Refresh();
+            if (new EditMemoWindow(target) { Owner = this }.ShowDialog() == true)
+                MemoList.Items.Refresh();
         }
     }
 
     private void DeleteMemo(object sender, RoutedEventArgs e)
     {
-        var index = MemoList.SelectedIndex;
-        if (index < 0) return;
-
-        var result = MessageBox.Show($"「{_state.Memos[index].Text}」を削除しますか？", "確認", MessageBoxButton.YesNo, MessageBoxImage.Warning);
-        if (result == MessageBoxResult.Yes)
+        if (MemoList.SelectedItem is MemoItem target)
         {
-            _state.Memos.RemoveAt(index);
-            MemoList.Items.Refresh();
+            if (MessageBox.Show($"「{target.Text}」を削除しますか？", "確認", MessageBoxButton.YesNo) == MessageBoxResult.Yes)
+            {
+                _state.Memos.Remove(target);
+                MemoList.Items.Refresh();
+            }
         }
     }
 
     private void MoveUp(object sender, RoutedEventArgs e)
     {
-        var i = MemoList.SelectedIndex;
+        int i = MemoList.SelectedIndex;
         if (i > 0)
         {
-            (_state.Memos[i - 1], _state.Memos[i]) = (_state.Memos[i], _state.Memos[i - 1]);
+            var item = _state.Memos[i];
+            _state.Memos.RemoveAt(i);
+            _state.Memos.Insert(i - 1, item);
             MemoList.SelectedIndex = i - 1;
             MemoList.Items.Refresh();
         }
@@ -66,10 +62,12 @@ public partial class SettingsWindow : Window
 
     private void MoveDown(object sender, RoutedEventArgs e)
     {
-        var i = MemoList.SelectedIndex;
+        int i = MemoList.SelectedIndex;
         if (i >= 0 && i < _state.Memos.Count - 1)
         {
-            (_state.Memos[i + 1], _state.Memos[i]) = (_state.Memos[i], _state.Memos[i + 1]);
+            var item = _state.Memos[i];
+            _state.Memos.RemoveAt(i);
+            _state.Memos.Insert(i + 1, item);
             MemoList.SelectedIndex = i + 1;
             MemoList.Items.Refresh();
         }
@@ -77,8 +75,7 @@ public partial class SettingsWindow : Window
 
     protected override void OnClosed(EventArgs e)
     {
-        if (TimeSpan.TryParse(ResetTimeBox.Text, out var t)) _state.ResetTime = t;
-        AppStateService.Save(_state);
+        if (TimeSpan.TryParse(ResetTimeBox.Text, out var ts)) _state.ResetTime = ts;
         base.OnClosed(e);
     }
 }

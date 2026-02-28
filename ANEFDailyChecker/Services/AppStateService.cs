@@ -26,8 +26,12 @@ public static class AppStateService
     public static AppState Load()
     {
         if (!File.Exists(FilePath)) return new AppState();
-        string json = File.ReadAllText(FilePath, Encoding.UTF8);
-        return JsonSerializer.Deserialize<AppState>(json, Options) ?? new AppState();
+        try
+        {
+            string json = File.ReadAllText(FilePath, Encoding.UTF8);
+            return JsonSerializer.Deserialize<AppState>(json, Options) ?? new AppState();
+        }
+        catch { return new AppState(); }
     }
 
     public static void Save(AppState state)
