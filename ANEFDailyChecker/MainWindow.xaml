@@ -1,4 +1,4 @@
-﻿<Window x:Class="ANEFDailyChecker.MainWindow"
+<Window x:Class="ANEFDailyChecker.MainWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         Title="ANEFDailyChecker"
@@ -62,7 +62,7 @@
                                               Style="{StaticResource ExpandButtonStyle}"
                                               Visibility="{Binding IsGroup, Converter={StaticResource BooleanToVisibilityConverter}}"/>
 
-                                <TextBlock Text="{Binding Text}" 
+                                <TextBlock Text="{Binding DisplayText}" 
                                            VerticalAlignment="Center"
                                            FontSize="12"
                                            Margin="0"/>

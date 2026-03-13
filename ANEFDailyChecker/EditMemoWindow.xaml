@@ -1,9 +1,10 @@
-﻿<Window x:Class="ANEFDailyChecker.EditMemoWindow"
+<Window x:Class="ANEFDailyChecker.EditMemoWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Title="メモの編集" Width="350" Height="500" WindowStartupLocation="CenterOwner">
+        Title="メモの編集" Width="350" Height="540" WindowStartupLocation="CenterOwner">
     <Grid Margin="10">
         <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="Auto"/>
@@ -13,20 +14,31 @@
             <RowDefinition Height="Auto"/>
         </Grid.RowDefinitions>
 
+        <!-- Row 0: 内容 -->
         <StackPanel Grid.Row="0" Margin="0,0,0,10">
             <TextBlock Text="内容" Margin="0,0,0,5"/>
             <TextBox x:Name="ParentTextBox"/>
         </StackPanel>
 
-        <CheckBox x:Name="GroupCheckBox" Grid.Row="1" Content="グループモードで使用する" 
+        <!-- Row 1: リセット日数 -->
+        <StackPanel Grid.Row="1" Orientation="Horizontal" Margin="0,0,0,10">
+            <TextBlock Text="リセット日数" VerticalAlignment="Center" Margin="0,0,8,0"/>
+            <TextBox x:Name="ResetCountBox" Width="50" VerticalAlignment="Center"/>
+            <TextBlock Text="日" VerticalAlignment="Center" Margin="4,0,0,0"/>
+        </StackPanel>
+
+        <!-- Row 2: グループモード -->
+        <CheckBox x:Name="GroupCheckBox" Grid.Row="2" Content="グループモードで使用する" 
                   Margin="0,0,0,10" Checked="GroupModeChanged" Unchecked="GroupModeChanged"/>
 
-        <DockPanel x:Name="ChildInputArea" Grid.Row="2" Margin="0,0,0,5">
+        <!-- Row 3: 子項目入力 -->
+        <DockPanel x:Name="ChildInputArea" Grid.Row="3" Margin="0,0,0,5">
             <Button Content="追加" DockPanel.Dock="Right" Width="50" Click="AddChild"/>
-            <TextBox x:Name="ChildTextBox" Margin="0,0,5,0"/>
+            <TextBox x:Name="ChildTextBox" Margin="0,0,5,0" KeyDown="ChildTextBox_KeyDown"/>
         </DockPanel>
 
-        <ListBox x:Name="ChildListBox" Grid.Row="3" DisplayMemberPath="Text">
+        <!-- Row 4: 子項目リスト -->
+        <ListBox x:Name="ChildListBox" Grid.Row="4" DisplayMemberPath="Text">
             <ListBox.ContextMenu>
                 <ContextMenu>
                     <MenuItem Header="編集" Click="EditChild"/>
@@ -35,8 +47,11 @@
             </ListBox.ContextMenu>
         </ListBox>
 
-        <Button x:Name="MoveUpButton" Content="↑ 上へ" Grid.Row="4" Margin="0,10,0,5" Click="MoveChildUp"/>
-        <Button x:Name="MoveDownButton" Content="↓ 下へ" Grid.Row="5" Margin="0,0,0,10" Click="MoveChildDown"/>
-        <Button Content="OK" Grid.Row="6" Height="30" Click="OkClick"/>
+        <!-- Row 5, 6: 並び替えボタン -->
+        <Button x:Name="MoveUpButton" Content="↑ 上へ" Grid.Row="5" Margin="0,10,0,5" Click="MoveChildUp"/>
+        <Button x:Name="MoveDownButton" Content="↓ 下へ" Grid.Row="6" Margin="0,0,0,10" Click="MoveChildDown"/>
+
+        <!-- Row 7: OK -->
+        <Button Content="OK" Grid.Row="7" Height="30" Click="OkClick"/>
     </Grid>
 </Window>

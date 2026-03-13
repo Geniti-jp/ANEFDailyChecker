@@ -1,4 +1,4 @@
-﻿using System.Windows;
+using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
@@ -36,6 +36,12 @@ public partial class MainWindow : Window
 
     private void ParentCheckChanged(object sender, RoutedEventArgs e)
     {
+        // 単体項目がチェックされたら RemainingCount をリセット
+        if (sender is CheckBox cb && cb.DataContext is MemoItem item && !item.IsGroup)
+        {
+            if (item.IsItemChecked)
+                item.RemainingCount = item.ResetCount;
+        }
         AppStateService.Save(_state);
     }
 
@@ -53,7 +59,14 @@ public partial class MainWindow : Window
         if (sender is CheckBox cb)
         {
             var parent = FindParentMemoItem(cb);
-            parent?.UpdateStatusFromChildren();
+            if (parent != null)
+            {
+                parent.UpdateStatusFromChildren();
+
+                // 全子がチェックされて親が完了状態になったときのみカウントダウンを開始
+                if (parent.IsChecked)
+                    parent.RemainingCount = parent.ResetCount;
+            }
             AppStateService.Save(_state);
         }
     }
@@ -77,7 +90,7 @@ public partial class MainWindow : Window
 
         if (_lastKnownUpdateTime != currentUpdateTime)
         {
-            ResetAllChecks();
+            ProcessReset();
             _lastKnownUpdateTime = currentUpdateTime;
         }
     }
@@ -99,22 +112,49 @@ public partial class MainWindow : Window
         return updateTime;
     }
 
-    private void ResetAllChecks()
+    /// <summary>
+    /// 時刻を跨いだ際に各親項目の RemainingCount を 1 減算し、
+    /// 0 になった項目のチェックをリセットする。
+    /// RemainingCount がすでに 0 の項目（リセット済み・未チェック状態）はスキップ。
+    /// </summary>
+    private void ProcessReset()
     {
         foreach (var m in _state.Memos)
         {
-            m.IsItemChecked = false;
-            foreach (var child in m.Children) child.IsItemChecked = false;
-            m.UpdateStatusFromChildren();
+            bool hasAnyCheck = m.IsGroup
+                ? m.Children.Any(c => c.IsChecked)
+                : m.IsItemChecked;
+
+            if (m.RemainingCount <= 0)
+            {
+                // カウントダウン未開始（全チェック前）だが一部チェックがある場合はリセットのみ実行
+                if (hasAnyCheck)
+                {
+                    m.IsItemChecked = false;
+                    foreach (var child in m.Children) child.IsItemChecked = false;
+                    m.UpdateStatusFromChildren();
+                }
+                continue;
+            }
+
+            m.RemainingCount--;
+
+            if (m.RemainingCount == 0)
+            {
+                m.IsItemChecked = false;
+                foreach (var child in m.Children) child.IsItemChecked = false;
+                m.UpdateStatusFromChildren();
+            }
         }
-        MemoList.Items.Refresh();
         AppStateService.Save(_state);
     }
 
     private void OpenSettings(object sender, RoutedEventArgs e)
     {
         new SettingsWindow(_state).ShowDialog();
-        MemoList.Items.Refresh();
+        // ResetTime が変わっても TimerTick が誤検知しないよう基準時刻を再計算する
+        _lastKnownUpdateTime = GetCurrentUpdateTime(DateTime.Now);
+        UpdateRemainingDisplay();
         AppStateService.Save(_state);
     }
 

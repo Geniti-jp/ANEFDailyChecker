@@ -1,4 +1,4 @@
-﻿<Window x:Class="ANEFDailyChecker.SettingsWindow"
+<Window x:Class="ANEFDailyChecker.SettingsWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         Title="設定" Width="400" Height="450">
@@ -7,18 +7,21 @@
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="Auto"/>
-            <RowDefinition Height="Auto"/>
             <RowDefinition Height="*"/>
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="Auto"/>
         </Grid.RowDefinitions>
 
-        <TextBox x:Name="MemoText" Grid.Row="0" Margin="0,0,0,5"/>
-        <Button Content="追加" Grid.Row="1" Margin="0,0,0,10" Click="AddMemo"/>
-        <TextBlock Text="リセット時刻 (hh:mm)" Grid.Row="2" Margin="0,0,0,2"/>
-        <TextBox x:Name="ResetTimeBox" Grid.Row="3" Margin="0,0,0,10"/>
+        <!-- Row 0: テキスト入力 + 追加ボタン（EditMemoWindowのChildInputAreaと同じ構成） -->
+        <DockPanel Grid.Row="0" Margin="0,0,0,10">
+            <Button Content="追加" DockPanel.Dock="Right" Width="50" Click="AddMemo"/>
+            <TextBox x:Name="MemoText" Margin="0,0,5,0" KeyDown="MemoText_KeyDown"/>
+        </DockPanel>
 
-        <ListBox x:Name="MemoList" Grid.Row="4" DisplayMemberPath="Text">
+        <TextBlock Text="リセット時刻 (hh:mm)" Grid.Row="1" Margin="0,0,0,2"/>
+        <TextBox x:Name="ResetTimeBox" Grid.Row="2" Margin="0,0,0,10"/>
+
+        <ListBox x:Name="MemoList" Grid.Row="3" DisplayMemberPath="Text">
             <ListBox.ContextMenu>
                 <ContextMenu>
                     <MenuItem Header="編集" Click="EditMemo"/>
@@ -27,7 +30,7 @@
             </ListBox.ContextMenu>
         </ListBox>
 
-        <Button Content="↑ 上へ" Grid.Row="5" Margin="0,10,0,5" Click="MoveUp"/>
-        <Button Content="↓ 下へ" Grid.Row="6" Click="MoveDown"/>
+        <Button Content="↑ 上へ" Grid.Row="4" Margin="0,10,0,5" Click="MoveUp"/>
+        <Button Content="↓ 下へ" Grid.Row="5" Click="MoveDown"/>
     </Grid>
 </Window>
