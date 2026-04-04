@@ -11,6 +11,12 @@ public class AppState
 {
     public ObservableCollection<MemoItem> Memos { get; set; } = new();
     public TimeSpan ResetTime { get; set; } = new(0, 0, 0);
+
+    /// <summary>アプリを最後に閉じた日時（起動時の経過リセット計算に使用）</summary>
+    public DateTime? LastClosedAt { get; set; }
+
+    /// <summary>登録済みタイマー一覧</summary>
+    public ObservableCollection<TimerConfig> Timers { get; set; } = new();
 }
 
 public static class AppStateService
@@ -31,12 +37,15 @@ public static class AppStateService
             string json = File.ReadAllText(FilePath, Encoding.UTF8);
             var state = JsonSerializer.Deserialize<AppState>(json, Options) ?? new AppState();
 
-            // 旧バージョンの state.json は ResetCount/RemainingCount が 0 になる場合があるため補正
+            // 旧バージョン移行: MemoItem の既定値補正
             foreach (var memo in state.Memos)
             {
                 if (memo.ResetCount < 1) memo.ResetCount = 1;
                 if (memo.RemainingCount < 1) memo.RemainingCount = memo.ResetCount;
             }
+
+            // 旧バージョン移行: Timers が null の場合は初期化
+            state.Timers ??= new();
 
             return state;
         }

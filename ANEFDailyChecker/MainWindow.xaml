@@ -6,6 +6,7 @@
         Height="500">
 
     <Window.Resources>
+        <!-- ListBoxItem の余白・選択ハイライト除去 -->
         <Style TargetType="ListBoxItem">
             <Setter Property="Padding" Value="0"/>
             <Setter Property="Margin" Value="0"/>
@@ -18,6 +19,7 @@
             </Setter>
         </Style>
 
+        <!-- ExpandBtn スタイル -->
         <Style x:Key="ExpandButtonStyle" TargetType="ToggleButton">
             <Setter Property="Width" Value="13"/>
             <Setter Property="Height" Value="13"/>
@@ -32,51 +34,181 @@
                 </Trigger>
             </Style.Triggers>
         </Style>
+
+        <!-- タイマーボタン アイコンボタンスタイル（二重枠を防ぐため ControlTemplate を明示） -->
+        <Style x:Key="TimerIconButtonStyle" TargetType="Button">
+            <Setter Property="Width" Value="30"/>
+            <Setter Property="Height" Value="30"/>
+            <Setter Property="FontSize" Value="14"/>
+            <Setter Property="Padding" Value="0"/>
+            <Setter Property="Margin" Value="2,0"/>
+            <Setter Property="FocusVisualStyle" Value="{x:Null}"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="border"
+                                Background="{TemplateBinding Background}"
+                                BorderBrush="#AAAAAA"
+                                BorderThickness="1"
+                                CornerRadius="2">
+                            <ContentPresenter HorizontalAlignment="Center"
+                                              VerticalAlignment="Center"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="border" Property="Background" Value="#E0E0E0"/>
+                            </Trigger>
+                            <Trigger Property="IsPressed" Value="True">
+                                <Setter TargetName="border" Property="Background" Value="#C8C8C8"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <!-- タイマーボタン本体スタイル（フラット） -->
+        <Style x:Key="TimerBodyStyle" TargetType="Border">
+            <Setter Property="Background" Value="#F0F0F0"/>
+            <Setter Property="BorderBrush" Value="#BBBBBB"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="MinHeight" Value="38"/>
+            <Setter Property="Margin" Value="0,2,0,0"/>
+            <Setter Property="Cursor" Value="Hand"/>
+        </Style>
     </Window.Resources>
 
     <DockPanel Margin="10">
+        <!-- ヘッダー行（カウントダウン + 設定ボタン） -->
         <Grid DockPanel.Dock="Top" Margin="0,0,0,3">
-            <TextBlock x:Name="RemainingText" 
-                       Text="次回更新まで --時間--分" 
-                       VerticalAlignment="Center" 
+            <TextBlock x:Name="RemainingText"
+                       Text="次回更新まで --時間--分"
+                       VerticalAlignment="Center"
                        FontSize="12" Margin="2,0,0,0" Height="20"/>
 
             <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
-                <Button Content="再読込" Width="60" Margin="0,0,5,0" Click="ReloadClick"/>
+                <Button Content="タイマー設定" Width="75" Margin="0,0,4,0" Click="OpenTimerSettings"/>
                 <Button Content="設定" Width="60" Click="OpenSettings"/>
             </StackPanel>
         </Grid>
 
+        <!-- タイマーボタン一覧（下部） -->
+        <ItemsControl x:Name="TimerPanel"
+                      DockPanel.Dock="Bottom"
+                      Margin="0,4,0,0">
+            <ItemsControl.ItemTemplate>
+                <DataTemplate>
+                    <Border Style="{StaticResource TimerBodyStyle}"
+                            MouseLeftButtonDown="TimerRowMouseDown">
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="88"/>
+                            </Grid.ColumnDefinitions>
+
+                            <!-- 名前 + 時間表示 -->
+                            <StackPanel Grid.Column="0"
+                                        Orientation="Horizontal"
+                                        HorizontalAlignment="Center"
+                                        VerticalAlignment="Center">
+                                <TextBlock Text="{Binding Name}"
+                                           FontSize="15"
+                                           VerticalAlignment="Center"
+                                           Margin="4,0,8,0"/>
+                                <TextBlock Text="{Binding DisplayText}"
+                                           FontSize="15"
+                                           VerticalAlignment="Center"/>
+                            </StackPanel>
+
+                            <!-- アイコンボタン群（右端・2列固定・各セル44px） -->
+                            <Grid Grid.Column="1" VerticalAlignment="Center">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="44"/>
+                                    <ColumnDefinition Width="44"/>
+                                </Grid.ColumnDefinitions>
+
+                                <!-- 左セル: 再生中=⏸ / 一時停止中=▶(再開) / 停止中=空 -->
+                                <Button Grid.Column="0"
+                                        Style="{StaticResource TimerIconButtonStyle}"
+                                        Width="36" Height="36"
+                                        HorizontalAlignment="Center"
+                                        Visibility="{Binding IsRunning, Converter={StaticResource BooleanToVisibilityConverter}}"
+                                        Click="TimerPauseClick">
+                                    <Image Source="pack://siteoforigin:,,,/Icons/icon_pause.png"
+                                           Width="22" Height="22" Stretch="Uniform"/>
+                                </Button>
+                                <Button Grid.Column="0"
+                                        Style="{StaticResource TimerIconButtonStyle}"
+                                        Width="36" Height="36"
+                                        HorizontalAlignment="Center"
+                                        Visibility="{Binding IsPaused, Converter={StaticResource BooleanToVisibilityConverter}}"
+                                        Click="TimerResumeClick">
+                                    <Image Source="pack://siteoforigin:,,,/Icons/icon_play.png"
+                                           Width="22" Height="22" Stretch="Uniform"/>
+                                </Button>
+
+                                <!-- 右セル: 停止中=▶(開始) / 再生・一時停止中=↺ -->
+                                <Button Grid.Column="1"
+                                        Style="{StaticResource TimerIconButtonStyle}"
+                                        Width="36" Height="36"
+                                        HorizontalAlignment="Center"
+                                        Visibility="{Binding IsStopped, Converter={StaticResource BooleanToVisibilityConverter}}"
+                                        Click="TimerPlayClick">
+                                    <Image Source="pack://siteoforigin:,,,/Icons/icon_play.png"
+                                           Width="22" Height="22" Stretch="Uniform"/>
+                                </Button>
+                                <Button Grid.Column="1"
+                                        Style="{StaticResource TimerIconButtonStyle}"
+                                        Width="36" Height="36"
+                                        HorizontalAlignment="Center"
+                                        Visibility="{Binding IsActive, Converter={StaticResource BooleanToVisibilityConverter}}"
+                                        Click="TimerResetClick">
+                                    <Image Source="pack://siteoforigin:,,,/Icons/icon_reset.png"
+                                           Width="22" Height="22" Stretch="Uniform"/>
+                                </Button>
+                            </Grid>
+                        </Grid>
+                    </Border>
+                </DataTemplate>
+            </ItemsControl.ItemTemplate>
+        </ItemsControl>
+
+        <!-- メモ一覧 -->
         <ListBox x:Name="MemoList" BorderThickness="1" BorderBrush="#CCCCCC" HorizontalContentAlignment="Stretch">
             <ListBox.ItemTemplate>
                 <DataTemplate>
-                    <StackPanel Margin="2">
+                    <!-- 行全体クリックでチェック / 展開切替 -->
+                    <StackPanel Margin="2"
+                                MouseLeftButtonDown="RowMouseDown">
                         <Grid Height="15">
                             <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                                <CheckBox IsChecked="{Binding IsChecked}" 
+                                <CheckBox IsChecked="{Binding IsChecked}"
                                           VerticalAlignment="Center"
                                           PreviewMouseDown="ParentCheckPreview"
                                           Click="ParentCheckChanged"/>
 
-                                <ToggleButton x:Name="ExpandBtn" 
+                                <ToggleButton x:Name="ExpandBtn"
                                               Style="{StaticResource ExpandButtonStyle}"
+                                              IsChecked="{Binding IsExpanded}"
                                               Visibility="{Binding IsGroup, Converter={StaticResource BooleanToVisibilityConverter}}"/>
 
-                                <TextBlock Text="{Binding DisplayText}" 
+                                <TextBlock Text="{Binding DisplayText}"
                                            VerticalAlignment="Center"
                                            FontSize="12"
                                            Margin="0"/>
                             </StackPanel>
                         </Grid>
 
-                        <ItemsControl ItemsSource="{Binding Children}" 
+                        <!-- 子項目リスト（IsExpanded で展開制御） -->
+                        <ItemsControl ItemsSource="{Binding Children}"
                                       Margin="20,0,0,0"
-                                      Visibility="{Binding IsChecked, ElementName=ExpandBtn, Converter={StaticResource BooleanToVisibilityConverter}}">
+                                      Visibility="{Binding IsExpanded, Converter={StaticResource BooleanToVisibilityConverter}}">
                             <ItemsControl.ItemTemplate>
                                 <DataTemplate>
-                                    <Grid Height="15">
-                                        <CheckBox IsChecked="{Binding IsChecked}" 
-                                                  VerticalAlignment="Center" 
+                                    <Grid Height="15"
+                                          MouseLeftButtonDown="ChildRowMouseDown">
+                                        <CheckBox IsChecked="{Binding IsChecked}"
+                                                  VerticalAlignment="Center"
                                                   Click="ChildCheckChanged">
                                             <TextBlock Text="{Binding Text}" FontSize="12"/>
                                         </CheckBox>

@@ -1,0 +1,64 @@
+<Window x:Class="ANEFDailyChecker.EditTimerWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="タイマーの編集" Width="340" Height="380"
+        WindowStartupLocation="CenterOwner">
+    <Grid Margin="12">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+
+        <!-- 名前 -->
+        <TextBlock Grid.Row="0" Text="タイマー名" Margin="0,0,0,4"/>
+        <TextBox x:Name="NameBox" Grid.Row="1" Margin="0,0,0,12"/>
+
+        <!-- モード選択 -->
+        <TextBlock Grid.Row="2" Text="モード" Margin="0,0,0,4"/>
+        <StackPanel Grid.Row="3" Orientation="Horizontal" Margin="0,0,0,12">
+            <RadioButton x:Name="FixedModeRadio" Content="固定モード（時間を事前設定）"
+                         GroupName="TimerMode" Margin="0,0,16,0"
+                         Checked="ModeChanged"/>
+            <RadioButton x:Name="InputModeRadio" Content="都度入力モード"
+                         GroupName="TimerMode"
+                         Checked="ModeChanged"/>
+        </StackPanel>
+
+        <!-- 固定時間（固定モード時のみ表示） -->
+        <StackPanel x:Name="FixedTimePanel" Grid.Row="4"
+                    Orientation="Horizontal" Margin="0,0,0,12">
+            <TextBlock Text="時間（分）" VerticalAlignment="Center" Margin="0,0,8,0"/>
+            <TextBox x:Name="MinutesBox" Width="60" VerticalAlignment="Center"/>
+            <TextBlock Text="分" VerticalAlignment="Center" Margin="4,0,0,0"/>
+        </StackPanel>
+
+        <!-- 音声設定 -->
+        <TextBlock Grid.Row="5" Text="音声" Margin="0,0,0,4"/>
+        <StackPanel Grid.Row="6" Margin="0,0,0,12">
+            <CheckBox x:Name="BuiltinSoundCheck"
+                      Content="同梱の音声を使用する（chime01.wav）"
+                      Margin="0,0,0,6"
+                      Checked="SoundModeChanged" Unchecked="SoundModeChanged"/>
+            <DockPanel x:Name="CustomSoundPanel" Margin="0,0,0,8">
+                <Button Content="参照..." DockPanel.Dock="Right" Width="56" Click="BrowseSound"/>
+                <TextBox x:Name="SoundPathBox" Margin="0,0,4,0" IsReadOnly="True"/>
+            </DockPanel>
+            <!-- 繰り返し回数 -->
+            <StackPanel Orientation="Horizontal">
+                <TextBlock Text="音声繰り返し回数" VerticalAlignment="Center" Margin="0,0,8,0"/>
+                <TextBox x:Name="RepeatCountBox" Width="50" VerticalAlignment="Center"/>
+                <TextBlock Text="回" VerticalAlignment="Center" Margin="4,0,0,0"/>
+            </StackPanel>
+        </StackPanel>
+
+        <!-- OK ボタン -->
+        <Button Content="OK" Grid.Row="8" Height="30" Click="OkClick"/>
+    </Grid>
+</Window>

@@ -92,7 +92,6 @@ public partial class EditMemoWindow : Window
 
     private void OkClick(object sender, RoutedEventArgs e)
     {
-        // ResetCount のバリデーション（1以上の整数のみ）
         if (!int.TryParse(ResetCountBox.Text, out int resetCount) || resetCount < 1)
         {
             MessageBox.Show("リセット日数は 1 以上の整数で入力してください。", "入力エラー",
@@ -105,7 +104,6 @@ public partial class EditMemoWindow : Window
         _item.Text = ParentTextBox.Text;
         _item.IsGroup = GroupCheckBox.IsChecked ?? false;
 
-        // ResetCount が変わった場合、RemainingCount も新しい値に合わせる
         if (_item.ResetCount != resetCount)
         {
             _item.ResetCount = resetCount;

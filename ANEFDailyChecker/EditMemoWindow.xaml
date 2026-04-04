@@ -14,30 +14,25 @@
             <RowDefinition Height="Auto"/>
         </Grid.RowDefinitions>
 
-        <!-- Row 0: 内容 -->
         <StackPanel Grid.Row="0" Margin="0,0,0,10">
             <TextBlock Text="内容" Margin="0,0,0,5"/>
             <TextBox x:Name="ParentTextBox"/>
         </StackPanel>
 
-        <!-- Row 1: リセット日数 -->
         <StackPanel Grid.Row="1" Orientation="Horizontal" Margin="0,0,0,10">
             <TextBlock Text="リセット日数" VerticalAlignment="Center" Margin="0,0,8,0"/>
             <TextBox x:Name="ResetCountBox" Width="50" VerticalAlignment="Center"/>
             <TextBlock Text="日" VerticalAlignment="Center" Margin="4,0,0,0"/>
         </StackPanel>
 
-        <!-- Row 2: グループモード -->
-        <CheckBox x:Name="GroupCheckBox" Grid.Row="2" Content="グループモードで使用する" 
+        <CheckBox x:Name="GroupCheckBox" Grid.Row="2" Content="グループモードで使用する"
                   Margin="0,0,0,10" Checked="GroupModeChanged" Unchecked="GroupModeChanged"/>
 
-        <!-- Row 3: 子項目入力 -->
         <DockPanel x:Name="ChildInputArea" Grid.Row="3" Margin="0,0,0,5">
             <Button Content="追加" DockPanel.Dock="Right" Width="50" Click="AddChild"/>
             <TextBox x:Name="ChildTextBox" Margin="0,0,5,0" KeyDown="ChildTextBox_KeyDown"/>
         </DockPanel>
 
-        <!-- Row 4: 子項目リスト -->
         <ListBox x:Name="ChildListBox" Grid.Row="4" DisplayMemberPath="Text">
             <ListBox.ContextMenu>
                 <ContextMenu>
@@ -47,11 +42,8 @@
             </ListBox.ContextMenu>
         </ListBox>
 
-        <!-- Row 5, 6: 並び替えボタン -->
         <Button x:Name="MoveUpButton" Content="↑ 上へ" Grid.Row="5" Margin="0,10,0,5" Click="MoveChildUp"/>
         <Button x:Name="MoveDownButton" Content="↓ 下へ" Grid.Row="6" Margin="0,0,0,10" Click="MoveChildDown"/>
-
-        <!-- Row 7: OK -->
         <Button Content="OK" Grid.Row="7" Height="30" Click="OkClick"/>
     </Grid>
 </Window>

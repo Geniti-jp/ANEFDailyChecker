@@ -1,5 +1,8 @@
+using System.IO;
+using System.Media;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Controls.Primitives;
 using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Threading;
@@ -11,15 +14,23 @@ namespace ANEFDailyChecker;
 public partial class MainWindow : Window
 {
     private AppState _state;
-    private DispatcherTimer _timer = new();
+    private readonly DispatcherTimer _timer = new();
     private DateTime _lastKnownUpdateTime;
+
+    private static readonly string BuiltinSoundFile =
+        Path.Combine(AppContext.BaseDirectory, "chime01.wav");
 
     public MainWindow()
     {
         InitializeComponent();
         _state = AppStateService.Load();
         MemoList.ItemsSource = _state.Memos;
+        TimerPanel.ItemsSource = _state.Timers;
+
         _lastKnownUpdateTime = GetCurrentUpdateTime(DateTime.Now);
+
+        ProcessMissedResets();
+        ProcessMissedTimers();
 
         _timer.Interval = TimeSpan.FromSeconds(1);
         _timer.Tick += TimerTick;
@@ -27,65 +38,12 @@ public partial class MainWindow : Window
         UpdateRemainingDisplay();
     }
 
-    private void ReloadClick(object sender, RoutedEventArgs e)
-    {
-        _state = AppStateService.Load();
-        MemoList.ItemsSource = _state.Memos;
-        UpdateRemainingDisplay();
-    }
-
-    private void ParentCheckChanged(object sender, RoutedEventArgs e)
-    {
-        // 単体項目がチェックされたら RemainingCount をリセット
-        if (sender is CheckBox cb && cb.DataContext is MemoItem item && !item.IsGroup)
-        {
-            if (item.IsItemChecked)
-                item.RemainingCount = item.ResetCount;
-        }
-        AppStateService.Save(_state);
-    }
-
-    private void ParentCheckPreview(object sender, MouseButtonEventArgs e)
-    {
-        // グループ項目の親チェックボックスは、子要素の状態によってのみ変化させる
-        if (sender is CheckBox cb && cb.DataContext is MemoItem item && item.IsGroup)
-        {
-            e.Handled = true;
-        }
-    }
-
-    private void ChildCheckChanged(object sender, RoutedEventArgs e)
-    {
-        if (sender is CheckBox cb)
-        {
-            var parent = FindParentMemoItem(cb);
-            if (parent != null)
-            {
-                parent.UpdateStatusFromChildren();
-
-                // 全子がチェックされて親が完了状態になったときのみカウントダウンを開始
-                if (parent.IsChecked)
-                    parent.RemainingCount = parent.ResetCount;
-            }
-            AppStateService.Save(_state);
-        }
-    }
-
-    private MemoItem? FindParentMemoItem(DependencyObject child)
-    {
-        DependencyObject parentDep = VisualTreeHelper.GetParent(child);
-        while (parentDep != null && !(parentDep is ListBoxItem))
-        {
-            parentDep = VisualTreeHelper.GetParent(parentDep);
-        }
-        return (parentDep as ListBoxItem)?.Content as MemoItem;
-    }
+    // ─── タイマー Tick ───────────────────────────────────────────
 
     private void TimerTick(object? sender, EventArgs e)
     {
         var now = DateTime.Now;
         var currentUpdateTime = GetCurrentUpdateTime(now);
-
         UpdateRemainingDisplay();
 
         if (_lastKnownUpdateTime != currentUpdateTime)
@@ -93,7 +51,36 @@ public partial class MainWindow : Window
             ProcessReset();
             _lastKnownUpdateTime = currentUpdateTime;
         }
+
+        // カウントダウンタイマー処理
+        // 終了したタイマーをリストアップしてから通知（Tick 内で UI を止めない）
+        List<TimerConfig>? finished = null;
+        foreach (var tc in _state.Timers)
+        {
+            if (tc.State != TimerState.Running) continue;
+            tc.RemainingSeconds--;
+            if (tc.RemainingSeconds <= 0)
+            {
+                tc.State = TimerState.Stopped;
+                tc.StartedAt = null;
+                finished ??= new();
+                finished.Add(tc);
+            }
+        }
+
+        if (finished != null)
+        {
+            AppStateService.Save(_state);
+            // 通知は Dispatcher 経由で非同期発火 → Tick をブロックしない
+            foreach (var tc in finished)
+            {
+                var captured = tc;
+                Dispatcher.InvokeAsync(() => ShowTimerFinished(captured));
+            }
+        }
     }
+
+    // ─── メモリセット関連 ─────────────────────────────────────────
 
     private void UpdateRemainingDisplay()
     {
@@ -101,8 +88,8 @@ public partial class MainWindow : Window
         var currentUpdateTime = GetCurrentUpdateTime(now);
         var next = currentUpdateTime.AddDays(1);
         var remain = next - now;
-
-        RemainingText.Text = $"次回更新まで{remain.Hours}時間{remain.Minutes}分({_state.ResetTime:hh\\:mm}更新)";
+        RemainingText.Text =
+            $"次回更新まで{remain.Hours}時間{remain.Minutes}分({_state.ResetTime:hh\\:mm}更新)";
     }
 
     private DateTime GetCurrentUpdateTime(DateTime now)
@@ -112,11 +99,60 @@ public partial class MainWindow : Window
         return updateTime;
     }
 
-    /// <summary>
-    /// 時刻を跨いだ際に各親項目の RemainingCount を 1 減算し、
-    /// 0 になった項目のチェックをリセットする。
-    /// RemainingCount がすでに 0 の項目（リセット済み・未チェック状態）はスキップ。
-    /// </summary>
+    private void ProcessMissedResets()
+    {
+        if (_state.LastClosedAt == null) return;
+        var lastClosed = _state.LastClosedAt.Value;
+        var now = DateTime.Now;
+        if (now <= lastClosed) return;
+
+        var checkTime = lastClosed;
+        int count = 0;
+        while (count < 365)
+        {
+            var todayReset = checkTime.Date + _state.ResetTime;
+            DateTime nextReset = todayReset > checkTime ? todayReset : todayReset.AddDays(1);
+            if (nextReset > now) break;
+            count++;
+            checkTime = nextReset;
+        }
+        for (int i = 0; i < count; i++) ProcessReset();
+        if (count > 0) AppStateService.Save(_state);
+    }
+
+    private void ProcessMissedTimers()
+    {
+        var now = DateTime.Now;
+        bool changed = false;
+
+        foreach (var tc in _state.Timers)
+        {
+            if (tc.State != TimerState.Running || tc.StartedAt == null) continue;
+
+            int elapsed = (int)(now - tc.StartedAt.Value).TotalSeconds;
+            if (elapsed <= 0) continue;
+
+            tc.RemainingSeconds -= elapsed;
+            changed = true;
+
+            if (tc.RemainingSeconds <= 0)
+            {
+                tc.State = TimerState.Stopped;
+                tc.StartedAt = null;
+                PlayTimerSound(tc);
+                // 起動直後の通知は Dispatcher 経由で
+                var captured = tc;
+                Dispatcher.InvokeAsync(() => ShowTimerFinished(captured));
+            }
+            else
+            {
+                tc.StartedAt = now;
+            }
+        }
+
+        if (changed) AppStateService.Save(_state);
+    }
+
     private void ProcessReset()
     {
         foreach (var m in _state.Memos)
@@ -127,7 +163,6 @@ public partial class MainWindow : Window
 
             if (m.RemainingCount <= 0)
             {
-                // カウントダウン未開始（全チェック前）だが一部チェックがある場合はリセットのみ実行
                 if (hasAnyCheck)
                 {
                     m.IsItemChecked = false;
@@ -149,17 +184,241 @@ public partial class MainWindow : Window
         AppStateService.Save(_state);
     }
 
+    // ─── タイマー終了通知 ─────────────────────────────────────────
+
+    /// <summary>
+    /// タイマー終了時の音声再生 + 非モーダルポップアップ表示。
+    /// 複数タイマーが同時終了してもそれぞれ独立したウィンドウで表示され、
+    /// Tick ループをブロックしない。
+    /// </summary>
+    private void ShowTimerFinished(TimerConfig tc)
+    {
+        PlayTimerSound(tc);
+        var notif = new TimerNotificationWindow(tc.Name, this);
+        notif.Show();
+    }
+
+    private void PlayTimerSound(TimerConfig tc)
+    {
+        try
+        {
+            string soundFile = tc.UseBuiltinSound ? BuiltinSoundFile : tc.SoundPath;
+
+            if (!tc.UseBuiltinSound && !File.Exists(soundFile))
+            {
+                MessageBox.Show(
+                    $"音声ファイルが見つかりません:\n{soundFile}\n\n同梱の音声を使用します。",
+                    "音声ファイルエラー", MessageBoxButton.OK, MessageBoxImage.Warning);
+                soundFile = BuiltinSoundFile;
+            }
+
+            if (!File.Exists(soundFile)) return;
+
+            int repeat = Math.Max(1, tc.SoundRepeatCount);
+            for (int i = 0; i < repeat; i++)
+            {
+                using var player = new SoundPlayer(soundFile);
+                player.PlaySync();
+            }
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"音声再生エラー: {ex.Message}");
+        }
+    }
+
+    // ─── メモチェックボックス操作 ────────────────────────────────
+
+    private void ParentCheckChanged(object sender, RoutedEventArgs e)
+    {
+        if (sender is CheckBox cb && cb.DataContext is MemoItem item && !item.IsGroup)
+        {
+            if (item.IsItemChecked)
+                item.RemainingCount = item.ResetCount;
+        }
+        AppStateService.Save(_state);
+    }
+
+    private void ParentCheckPreview(object sender, MouseButtonEventArgs e)
+    {
+        if (sender is CheckBox cb && cb.DataContext is MemoItem item && item.IsGroup)
+            e.Handled = true;
+    }
+
+    private void ChildCheckChanged(object sender, RoutedEventArgs e)
+    {
+        if (sender is CheckBox cb && cb.DataContext is MemoItem child)
+            HandleChildCheckChange(child);
+    }
+
+    private void HandleChildCheckChange(MemoItem child)
+    {
+        var parent = _state.Memos.FirstOrDefault(m => m.Children.Contains(child));
+        if (parent != null)
+        {
+            parent.UpdateStatusFromChildren();
+            if (parent.IsChecked)
+                parent.RemainingCount = parent.ResetCount;
+        }
+        AppStateService.Save(_state);
+    }
+
+    // ─── 行全体クリック（チェック領域拡大） ───────────────────────
+
+    private void RowMouseDown(object sender, MouseButtonEventArgs e)
+    {
+        if (e.ChangedButton != MouseButton.Left) return;
+        if (e.OriginalSource is DependencyObject orig)
+        {
+            var p = orig;
+            while (p != null)
+            {
+                if (p is CheckBox || p is ToggleButton || p is Button) return;
+                if (p == sender) break;
+                p = VisualTreeHelper.GetParent(p);
+            }
+        }
+        if (sender is FrameworkElement fe && fe.DataContext is MemoItem item)
+        {
+            if (item.IsGroup)
+            {
+                item.IsExpanded = !item.IsExpanded;
+                AppStateService.Save(_state);
+            }
+            else
+            {
+                item.IsItemChecked = !item.IsItemChecked;
+                if (item.IsItemChecked)
+                    item.RemainingCount = item.ResetCount;
+                AppStateService.Save(_state);
+            }
+            e.Handled = true;
+        }
+    }
+
+    private void ChildRowMouseDown(object sender, MouseButtonEventArgs e)
+    {
+        if (e.ChangedButton != MouseButton.Left) return;
+        var orig = e.OriginalSource as DependencyObject;
+        while (orig != null)
+        {
+            if (orig is CheckBox) { e.Handled = true; return; }
+            if (orig == sender) break;
+            orig = VisualTreeHelper.GetParent(orig);
+        }
+        if (sender is FrameworkElement fe && fe.DataContext is MemoItem child)
+        {
+            child.IsItemChecked = !child.IsItemChecked;
+            HandleChildCheckChange(child);
+            e.Handled = true;
+        }
+    }
+
+    // ─── 設定ウィンドウ ───────────────────────────────────────────
+
     private void OpenSettings(object sender, RoutedEventArgs e)
     {
         new SettingsWindow(_state).ShowDialog();
-        // ResetTime が変わっても TimerTick が誤検知しないよう基準時刻を再計算する
+        TimerPanel.ItemsSource = null;
+        TimerPanel.ItemsSource = _state.Timers;
         _lastKnownUpdateTime = GetCurrentUpdateTime(DateTime.Now);
         UpdateRemainingDisplay();
         AppStateService.Save(_state);
     }
 
+    private void OpenTimerSettings(object sender, RoutedEventArgs e)
+    {
+        new TimerSettingsWindow(_state) { Owner = this }.ShowDialog();
+        TimerPanel.ItemsSource = null;
+        TimerPanel.ItemsSource = _state.Timers;
+        AppStateService.Save(_state);
+    }
+
+    // ─── タイマーボタン操作 ──────────────────────────────────────
+
+    private void TimerRowMouseDown(object sender, MouseButtonEventArgs e)
+    {
+        if (e.ChangedButton != MouseButton.Left) return;
+        if (sender is FrameworkElement fe && fe.DataContext is TimerConfig tc && tc.IsStopped)
+        {
+            StartTimer(tc);
+            e.Handled = true;
+        }
+    }
+
+    private void TimerPlayClick(object sender, RoutedEventArgs e)
+    {
+        if (sender is Button btn && btn.DataContext is TimerConfig tc && tc.IsStopped)
+            StartTimer(tc);
+        e.Handled = true;
+    }
+
+    private void TimerPauseClick(object sender, RoutedEventArgs e)
+    {
+        if (sender is Button btn && btn.DataContext is TimerConfig tc && tc.IsRunning)
+        {
+            tc.State = TimerState.Paused;
+            tc.StartedAt = null;
+            AppStateService.Save(_state);
+        }
+        e.Handled = true;
+    }
+
+    private void TimerResumeClick(object sender, RoutedEventArgs e)
+    {
+        if (sender is Button btn && btn.DataContext is TimerConfig tc && tc.IsPaused)
+        {
+            tc.State = TimerState.Running;
+            tc.StartedAt = DateTime.Now;
+            AppStateService.Save(_state);
+        }
+        e.Handled = true;
+    }
+
+    private void TimerResetClick(object sender, RoutedEventArgs e)
+    {
+        if (sender is Button btn && btn.DataContext is TimerConfig tc && tc.IsActive)
+        {
+            var result = MessageBox.Show(
+                $"「{tc.Name}」をリセットしますか？",
+                "確認", MessageBoxButton.YesNo, MessageBoxImage.Question);
+
+            if (result == MessageBoxResult.Yes)
+            {
+                tc.State = TimerState.Stopped;
+                tc.StartedAt = null;
+                AppStateService.Save(_state);
+            }
+        }
+        e.Handled = true;
+    }
+
+    private void StartTimer(TimerConfig tc)
+    {
+        int minutes;
+        if (tc.IsFixedMode)
+        {
+            minutes = tc.FixedMinutes;
+        }
+        else
+        {
+            var inputWin = new TimerInputWindow(tc.Name) { Owner = this };
+            if (inputWin.ShowDialog() != true) return;
+            minutes = inputWin.InputMinutes;
+            tc.CurrentSetMinutes = minutes;
+        }
+
+        tc.RemainingSeconds = minutes * 60;
+        tc.StartedAt = DateTime.Now;
+        tc.State = TimerState.Running;
+        AppStateService.Save(_state);
+    }
+
+    // ─── 終了処理 ────────────────────────────────────────────────
+
     protected override void OnClosed(EventArgs e)
     {
+        _state.LastClosedAt = DateTime.Now;
         AppStateService.Save(_state);
         base.OnClosed(e);
     }
