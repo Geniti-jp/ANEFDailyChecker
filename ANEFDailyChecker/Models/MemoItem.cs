@@ -13,6 +13,7 @@ public class MemoItem : INotifyPropertyChanged
     private bool _isExpanded = false;
     private int _resetCount = 1;
     private int _remainingCount = 1;
+    private bool _useDayOfWeekMode = false;
 
     public string Text
     {
@@ -47,7 +48,6 @@ public class MemoItem : INotifyPropertyChanged
         set { _isGroup = value; OnPropertyChanged(); OnPropertyChanged(nameof(IsChecked)); }
     }
 
-    /// <summary>グループの展開状態（state.json に保存）</summary>
     public bool IsExpanded
     {
         get => _isExpanded;
@@ -84,6 +84,38 @@ public class MemoItem : INotifyPropertyChanged
         }
     }
 
+    /// <summary>
+    /// true のとき DayOfWeekTexts を参照して曜日別テキストを返す。
+    /// false のときは常に Text を返す。
+    /// </summary>
+    public bool UseDayOfWeekMode
+    {
+        get => _useDayOfWeekMode;
+        set { _useDayOfWeekMode = value; OnPropertyChanged(); OnPropertyChanged(nameof(EffectiveText)); OnPropertyChanged(nameof(DisplayText)); }
+    }
+
+    /// <summary>曜日別テキスト。キー = (int)DayOfWeek（0=日〜6=土）。</summary>
+    public Dictionary<int, string> DayOfWeekTexts { get; set; } = new();
+
+    /// <summary>
+    /// UseDayOfWeekMode が true で今日の曜日に対応するテキストがあればそれを返す。
+    /// それ以外は Text を返す。
+    /// </summary>
+    [JsonIgnore]
+    public string EffectiveText
+    {
+        get
+        {
+            if (UseDayOfWeekMode)
+            {
+                int dow = (int)DateTime.Now.DayOfWeek;
+                if (DayOfWeekTexts.TryGetValue(dow, out var t) && !string.IsNullOrEmpty(t))
+                    return t;
+            }
+            return Text;
+        }
+    }
+
     [JsonIgnore]
     public string DisplayPrefix =>
         ResetCount <= 1 ? "" :
@@ -91,11 +123,18 @@ public class MemoItem : INotifyPropertyChanged
         $"({RemainingCount}日後)";
 
     [JsonIgnore]
-    public string DisplayText => DisplayPrefix + Text;
+    public string DisplayText => DisplayPrefix + EffectiveText;
 
     public ObservableCollection<MemoItem> Children { get; set; } = new();
 
     public void UpdateStatusFromChildren() => OnPropertyChanged(nameof(IsChecked));
+
+    /// <summary>曜日が変わったときに DisplayText を再通知する。</summary>
+    public void RefreshDayText()
+    {
+        OnPropertyChanged(nameof(EffectiveText));
+        OnPropertyChanged(nameof(DisplayText));
+    }
 
     public event PropertyChangedEventHandler? PropertyChanged;
     protected void OnPropertyChanged([CallerMemberName] string? name = null) =>

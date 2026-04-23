@@ -210,7 +210,7 @@
                                         <CheckBox IsChecked="{Binding IsChecked}"
                                                   VerticalAlignment="Center"
                                                   Click="ChildCheckChanged">
-                                            <TextBlock Text="{Binding Text}" FontSize="12"/>
+                                            <TextBlock Text="{Binding EffectiveText}" FontSize="12"/>
                                         </CheckBox>
                                     </Grid>
                                 </DataTemplate>

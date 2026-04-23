@@ -16,6 +16,7 @@ public partial class MainWindow : Window
     private AppState _state;
     private readonly DispatcherTimer _timer = new();
     private DateTime _lastKnownUpdateTime;
+    private DateTime _lastKnownDate = DateTime.Today;
 
     private static readonly string BuiltinSoundFile =
         Path.Combine(AppContext.BaseDirectory, "chime01.wav");
@@ -50,6 +51,13 @@ public partial class MainWindow : Window
         {
             ProcessReset();
             _lastKnownUpdateTime = currentUpdateTime;
+        }
+
+        // 日付変化時に全項目の曜日別テキストを更新
+        if (_lastKnownDate != DateTime.Today)
+        {
+            _lastKnownDate = DateTime.Today;
+            RefreshAllDayTexts();
         }
 
         // カウントダウンタイマー処理
@@ -151,6 +159,17 @@ public partial class MainWindow : Window
         }
 
         if (changed) AppStateService.Save(_state);
+    }
+
+    /// <summary>全メモ項目の曜日別テキストを再通知する（日付変化時に呼ぶ）。</summary>
+    private void RefreshAllDayTexts()
+    {
+        foreach (var m in _state.Memos)
+        {
+            m.RefreshDayText();
+            foreach (var child in m.Children)
+                child.RefreshDayText();
+        }
     }
 
     private void ProcessReset()

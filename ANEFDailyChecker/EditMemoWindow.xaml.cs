@@ -1,5 +1,5 @@
 using System.Windows;
-using Microsoft.VisualBasic;
+using System.Windows.Controls;
 using ANEFDailyChecker.Models;
 
 namespace ANEFDailyChecker;
@@ -7,27 +7,43 @@ namespace ANEFDailyChecker;
 public partial class EditMemoWindow : Window
 {
     private MemoItem _item;
+    private TextBox[] _dayBoxes = null!;
 
     public EditMemoWindow(MemoItem item)
     {
         InitializeComponent();
         _item = item;
+
+        _dayBoxes = new[] { SunBox, MonBox, TueBox, WedBox, ThuBox, FriBox, SatBox };
+
         ParentTextBox.Text = item.Text;
         ResetCountBox.Text = item.ResetCount.ToString();
         GroupCheckBox.IsChecked = item.IsGroup;
+        DayOfWeekCheckBox.IsChecked = item.UseDayOfWeekMode;
         ChildListBox.ItemsSource = item.Children;
+
+        for (int i = 0; i < _dayBoxes.Length; i++)
+        {
+            if (item.DayOfWeekTexts.TryGetValue(i, out var t))
+                _dayBoxes[i].Text = t;
+        }
+
         RefreshVisibility();
     }
 
     private void GroupModeChanged(object sender, RoutedEventArgs e) => RefreshVisibility();
+    private void DayModeChanged(object sender, RoutedEventArgs e) => RefreshVisibility();
 
     private void RefreshVisibility()
     {
-        var isGroup = GroupCheckBox.IsChecked ?? false;
-        if (ChildInputArea != null) ChildInputArea.Visibility = isGroup ? Visibility.Visible : Visibility.Collapsed;
-        if (ChildListBox != null) ChildListBox.Visibility = isGroup ? Visibility.Visible : Visibility.Collapsed;
-        if (MoveUpButton != null) MoveUpButton.Visibility = isGroup ? Visibility.Visible : Visibility.Collapsed;
-        if (MoveDownButton != null) MoveDownButton.Visibility = isGroup ? Visibility.Visible : Visibility.Collapsed;
+        bool isGroup  = GroupCheckBox.IsChecked    ?? false;
+        bool isDayMode = DayOfWeekCheckBox.IsChecked ?? false;
+
+        if (ChildInputArea  != null) ChildInputArea.Visibility  = isGroup   ? Visibility.Visible : Visibility.Collapsed;
+        if (ChildListBox    != null) ChildListBox.Visibility    = isGroup   ? Visibility.Visible : Visibility.Collapsed;
+        if (MoveUpButton    != null) MoveUpButton.Visibility    = isGroup   ? Visibility.Visible : Visibility.Collapsed;
+        if (MoveDownButton  != null) MoveDownButton.Visibility  = isGroup   ? Visibility.Visible : Visibility.Collapsed;
+        if (DayOfWeekPanel  != null) DayOfWeekPanel.Visibility  = isDayMode ? Visibility.Visible : Visibility.Collapsed;
     }
 
     private void AddChild(object sender, RoutedEventArgs e)
@@ -52,12 +68,10 @@ public partial class EditMemoWindow : Window
     {
         if (ChildListBox.SelectedItem is MemoItem target)
         {
-            string result = Interaction.InputBox("内容を編集", "編集", target.Text);
-            if (!string.IsNullOrWhiteSpace(result))
-            {
-                target.Text = result;
-                ChildListBox.Items.Refresh();
-            }
+            var win = new EditChildWindow(target) { Owner = this };
+            win.ShowDialog();
+            // EditChildWindow が target を直接更新するので追加処理不要
+            ChildListBox.Items.Refresh();
         }
     }
 
@@ -101,15 +115,26 @@ public partial class EditMemoWindow : Window
             return;
         }
 
-        _item.Text = ParentTextBox.Text;
+        _item.Text    = ParentTextBox.Text;
         _item.IsGroup = GroupCheckBox.IsChecked ?? false;
+        _item.UseDayOfWeekMode = DayOfWeekCheckBox.IsChecked ?? false;
 
         if (_item.ResetCount != resetCount)
         {
-            _item.ResetCount = resetCount;
+            _item.ResetCount    = resetCount;
             _item.RemainingCount = resetCount;
         }
 
+        // 曜日別テキストを保存（空欄はキーを削除）
+        _item.DayOfWeekTexts.Clear();
+        for (int i = 0; i < _dayBoxes.Length; i++)
+        {
+            string val = _dayBoxes[i].Text.Trim();
+            if (!string.IsNullOrEmpty(val))
+                _item.DayOfWeekTexts[i] = val;
+        }
+
+        _item.RefreshDayText();
         DialogResult = true;
     }
 }
