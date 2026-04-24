@@ -205,14 +205,39 @@
                                       Visibility="{Binding IsExpanded, Converter={StaticResource BooleanToVisibilityConverter}}">
                             <ItemsControl.ItemTemplate>
                                 <DataTemplate>
-                                    <Grid Height="15"
-                                          MouseLeftButtonDown="ChildRowMouseDown">
-                                        <CheckBox IsChecked="{Binding IsChecked}"
-                                                  VerticalAlignment="Center"
-                                                  Click="ChildCheckChanged">
-                                            <TextBlock Text="{Binding EffectiveText}" FontSize="12"/>
-                                        </CheckBox>
-                                    </Grid>
+                                    <!-- 子行（グループ子の場合は展開ボタン表示） -->
+                                    <StackPanel MouseLeftButtonDown="ChildRowMouseDown">
+                                        <Grid Height="15">
+                                            <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                                <CheckBox IsChecked="{Binding IsChecked}"
+                                                          VerticalAlignment="Center"
+                                                          PreviewMouseDown="ChildGroupCheckPreview"
+                                                          Click="ChildCheckChanged"/>
+                                                <ToggleButton Style="{StaticResource ExpandButtonStyle}"
+                                                              IsChecked="{Binding IsExpanded}"
+                                                              Visibility="{Binding IsGroup, Converter={StaticResource BooleanToVisibilityConverter}}"/>
+                                                <TextBlock Text="{Binding DisplayText}" FontSize="12"
+                                                           VerticalAlignment="Center"/>
+                                            </StackPanel>
+                                        </Grid>
+                                        <!-- 孫項目リスト -->
+                                        <ItemsControl ItemsSource="{Binding Children}"
+                                                      Margin="20,0,0,0"
+                                                      Visibility="{Binding IsExpanded, Converter={StaticResource BooleanToVisibilityConverter}}">
+                                            <ItemsControl.ItemTemplate>
+                                                <DataTemplate>
+                                                    <Grid Height="15"
+                                                          MouseLeftButtonDown="GrandChildRowMouseDown">
+                                                        <CheckBox IsChecked="{Binding IsChecked}"
+                                                                  VerticalAlignment="Center"
+                                                                  Click="GrandChildCheckChanged">
+                                                            <TextBlock Text="{Binding DisplayText}" FontSize="12"/>
+                                                        </CheckBox>
+                                                    </Grid>
+                                                </DataTemplate>
+                                            </ItemsControl.ItemTemplate>
+                                        </ItemsControl>
+                                    </StackPanel>
                                 </DataTemplate>
                             </ItemsControl.ItemTemplate>
                         </ItemsControl>

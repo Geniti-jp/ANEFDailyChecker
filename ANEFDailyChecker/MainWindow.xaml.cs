@@ -53,15 +53,12 @@ public partial class MainWindow : Window
             _lastKnownUpdateTime = currentUpdateTime;
         }
 
-        // 日付変化時に全項目の曜日別テキストを更新
         if (_lastKnownDate != DateTime.Today)
         {
             _lastKnownDate = DateTime.Today;
             RefreshAllDayTexts();
         }
 
-        // カウントダウンタイマー処理
-        // 終了したタイマーをリストアップしてから通知（Tick 内で UI を止めない）
         List<TimerConfig>? finished = null;
         foreach (var tc in _state.Timers)
         {
@@ -79,7 +76,6 @@ public partial class MainWindow : Window
         if (finished != null)
         {
             AppStateService.Save(_state);
-            // 通知は Dispatcher 経由で非同期発火 → Tick をブロックしない
             foreach (var tc in finished)
             {
                 var captured = tc;
@@ -137,7 +133,7 @@ public partial class MainWindow : Window
         {
             if (tc.State != TimerState.Running || tc.StartedAt == null) continue;
 
-            int elapsed = (int)(now - tc.StartedAt.Value).TotalSeconds;
+            int elapsed = (int)Math.Min((now - tc.StartedAt.Value).TotalSeconds, tc.RemainingSeconds + 1);
             if (elapsed <= 0) continue;
 
             tc.RemainingSeconds -= elapsed;
@@ -148,7 +144,6 @@ public partial class MainWindow : Window
                 tc.State = TimerState.Stopped;
                 tc.StartedAt = null;
                 PlayTimerSound(tc);
-                // 起動直後の通知は Dispatcher 経由で
                 var captured = tc;
                 Dispatcher.InvokeAsync(() => ShowTimerFinished(captured));
             }
@@ -161,14 +156,17 @@ public partial class MainWindow : Window
         if (changed) AppStateService.Save(_state);
     }
 
-    /// <summary>全メモ項目の曜日別テキストを再通知する（日付変化時に呼ぶ）。</summary>
     private void RefreshAllDayTexts()
     {
         foreach (var m in _state.Memos)
         {
             m.RefreshDayText();
             foreach (var child in m.Children)
+            {
                 child.RefreshDayText();
+                foreach (var grandchild in child.Children)
+                    grandchild.RefreshDayText();
+            }
         }
     }
 
@@ -177,73 +175,34 @@ public partial class MainWindow : Window
         foreach (var m in _state.Memos)
         {
             bool hasAnyCheck = m.IsGroup
-                ? m.Children.Any(c => c.IsChecked)
+                ? m.Children.Any(c => c.IsChecked || c.Children.Any(gc => gc.IsChecked))
                 : m.IsItemChecked;
 
             if (m.RemainingCount <= 0)
             {
-                if (hasAnyCheck)
-                {
-                    m.IsItemChecked = false;
-                    foreach (var child in m.Children) child.IsItemChecked = false;
-                    m.UpdateStatusFromChildren();
-                }
+                if (hasAnyCheck) ResetMemoAndDescendants(m);
                 continue;
             }
 
             m.RemainingCount--;
 
             if (m.RemainingCount == 0)
-            {
-                m.IsItemChecked = false;
-                foreach (var child in m.Children) child.IsItemChecked = false;
-                m.UpdateStatusFromChildren();
-            }
+                ResetMemoAndDescendants(m);
         }
         AppStateService.Save(_state);
     }
 
-    // ─── タイマー終了通知 ─────────────────────────────────────────
-
-    /// <summary>
-    /// タイマー終了時の音声再生 + 非モーダルポップアップ表示。
-    /// 複数タイマーが同時終了してもそれぞれ独立したウィンドウで表示され、
-    /// Tick ループをブロックしない。
-    /// </summary>
-    private void ShowTimerFinished(TimerConfig tc)
+    private static void ResetMemoAndDescendants(MemoItem m)
     {
-        PlayTimerSound(tc);
-        var notif = new TimerNotificationWindow(tc.Name, this);
-        notif.Show();
-    }
-
-    private void PlayTimerSound(TimerConfig tc)
-    {
-        try
+        m.IsItemChecked = false;
+        foreach (var child in m.Children)
         {
-            string soundFile = tc.UseBuiltinSound ? BuiltinSoundFile : tc.SoundPath;
-
-            if (!tc.UseBuiltinSound && !File.Exists(soundFile))
-            {
-                MessageBox.Show(
-                    $"音声ファイルが見つかりません:\n{soundFile}\n\n同梱の音声を使用します。",
-                    "音声ファイルエラー", MessageBoxButton.OK, MessageBoxImage.Warning);
-                soundFile = BuiltinSoundFile;
-            }
-
-            if (!File.Exists(soundFile)) return;
-
-            int repeat = Math.Max(1, tc.SoundRepeatCount);
-            for (int i = 0; i < repeat; i++)
-            {
-                using var player = new SoundPlayer(soundFile);
-                player.PlaySync();
-            }
+            child.IsItemChecked = false;
+            foreach (var grandchild in child.Children)
+                grandchild.IsItemChecked = false;
+            child.UpdateStatusFromChildren();
         }
-        catch (Exception ex)
-        {
-            System.Diagnostics.Debug.WriteLine($"音声再生エラー: {ex.Message}");
-        }
+        m.UpdateStatusFromChildren();
     }
 
     // ─── メモチェックボックス操作 ────────────────────────────────
@@ -259,6 +218,13 @@ public partial class MainWindow : Window
     }
 
     private void ParentCheckPreview(object sender, MouseButtonEventArgs e)
+    {
+        if (sender is CheckBox cb && cb.DataContext is MemoItem item && item.IsGroup)
+            e.Handled = true;
+    }
+
+    /// <summary>グループ子項目のチェックボックス直接クリックを阻止する。</summary>
+    private void ChildGroupCheckPreview(object sender, MouseButtonEventArgs e)
     {
         if (sender is CheckBox cb && cb.DataContext is MemoItem item && item.IsGroup)
             e.Handled = true;
@@ -282,7 +248,41 @@ public partial class MainWindow : Window
         AppStateService.Save(_state);
     }
 
-    // ─── 行全体クリック（チェック領域拡大） ───────────────────────
+    private void GrandChildCheckChanged(object sender, RoutedEventArgs e)
+    {
+        if (sender is CheckBox cb && cb.DataContext is MemoItem grandchild)
+            HandleGrandChildCheckChange(grandchild);
+    }
+
+    private void HandleGrandChildCheckChange(MemoItem grandchild)
+    {
+        MemoItem? parentChild = null;
+        MemoItem? parent = null;
+        foreach (var m in _state.Memos)
+        {
+            foreach (var child in m.Children)
+            {
+                if (child.Children.Contains(grandchild))
+                {
+                    parentChild = child;
+                    parent = m;
+                    break;
+                }
+            }
+            if (parent != null) break;
+        }
+
+        parentChild?.UpdateStatusFromChildren();
+        if (parent != null)
+        {
+            parent.UpdateStatusFromChildren();
+            if (parent.IsChecked)
+                parent.RemainingCount = parent.ResetCount;
+        }
+        AppStateService.Save(_state);
+    }
+
+    // ─── 行全体クリック ───────────────────────────────────────────
 
     private void RowMouseDown(object sender, MouseButtonEventArgs e)
     {
@@ -315,7 +315,36 @@ public partial class MainWindow : Window
         }
     }
 
+    /// <summary>
+    /// 子行クリック。グループ子なら展開切替、非グループ子ならチェック切替。
+    /// </summary>
     private void ChildRowMouseDown(object sender, MouseButtonEventArgs e)
+    {
+        if (e.ChangedButton != MouseButton.Left) return;
+        var orig = e.OriginalSource as DependencyObject;
+        while (orig != null)
+        {
+            if (orig is CheckBox || orig is ToggleButton) { e.Handled = true; return; }
+            if (orig == sender) break;
+            orig = VisualTreeHelper.GetParent(orig);
+        }
+        if (sender is FrameworkElement fe && fe.DataContext is MemoItem child)
+        {
+            if (child.IsGroup)
+            {
+                child.IsExpanded = !child.IsExpanded;
+                AppStateService.Save(_state);
+            }
+            else
+            {
+                child.IsItemChecked = !child.IsItemChecked;
+                HandleChildCheckChange(child);
+            }
+            e.Handled = true;
+        }
+    }
+
+    private void GrandChildRowMouseDown(object sender, MouseButtonEventArgs e)
     {
         if (e.ChangedButton != MouseButton.Left) return;
         var orig = e.OriginalSource as DependencyObject;
@@ -325,10 +354,10 @@ public partial class MainWindow : Window
             if (orig == sender) break;
             orig = VisualTreeHelper.GetParent(orig);
         }
-        if (sender is FrameworkElement fe && fe.DataContext is MemoItem child)
+        if (sender is FrameworkElement fe && fe.DataContext is MemoItem grandchild)
         {
-            child.IsItemChecked = !child.IsItemChecked;
-            HandleChildCheckChange(child);
+            grandchild.IsItemChecked = !grandchild.IsItemChecked;
+            HandleGrandChildCheckChange(grandchild);
             e.Handled = true;
         }
     }
@@ -431,6 +460,42 @@ public partial class MainWindow : Window
         tc.StartedAt = DateTime.Now;
         tc.State = TimerState.Running;
         AppStateService.Save(_state);
+    }
+
+    private void ShowTimerFinished(TimerConfig tc)
+    {
+        PlayTimerSound(tc);
+        var notif = new TimerNotificationWindow(tc.Name, this);
+        notif.Show();
+    }
+
+    private void PlayTimerSound(TimerConfig tc)
+    {
+        try
+        {
+            string soundFile = tc.UseBuiltinSound ? BuiltinSoundFile : tc.SoundPath;
+
+            if (!tc.UseBuiltinSound && !File.Exists(soundFile))
+            {
+                MessageBox.Show(
+                    $"音声ファイルが見つかりません:\n{soundFile}\n\n同梱の音声を使用します。",
+                    "音声ファイルエラー", MessageBoxButton.OK, MessageBoxImage.Warning);
+                soundFile = BuiltinSoundFile;
+            }
+
+            if (!File.Exists(soundFile)) return;
+
+            int repeat = Math.Max(1, tc.SoundRepeatCount);
+            for (int i = 0; i < repeat; i++)
+            {
+                using var player = new SoundPlayer(soundFile);
+                player.PlaySync();
+            }
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"音声再生エラー: {ex.Message}");
+        }
     }
 
     // ─── 終了処理 ────────────────────────────────────────────────
