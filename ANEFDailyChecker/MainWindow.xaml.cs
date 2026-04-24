@@ -174,34 +174,93 @@ public partial class MainWindow : Window
     {
         foreach (var m in _state.Memos)
         {
-            bool hasAnyCheck = m.IsGroup
+            // ── 親レベルのリセット処理 ──────────────────────────────
+            bool parentHasCheck = m.IsGroup
                 ? m.Children.Any(c => c.IsChecked || c.Children.Any(gc => gc.IsChecked))
                 : m.IsItemChecked;
 
             if (m.RemainingCount <= 0)
             {
-                if (hasAnyCheck) ResetMemoAndDescendants(m);
-                continue;
+                if (parentHasCheck) ResetMemoAndDescendants(m);
+            }
+            else
+            {
+                m.RemainingCount--;
+                if (m.RemainingCount == 0)
+                    ResetMemoAndDescendants(m);
             }
 
-            m.RemainingCount--;
+            // ── 子レベルのリセット処理 ─────────────────────────────
+            // 孫の RemainingCount は「子のリセットが発火したとき」にのみ減算する。
+            // 子が日数を残している間は孫には手を付けない。
+            foreach (var child in m.Children)
+            {
+                bool childHasCheck = child.IsGroup
+                    ? child.Children.Any(gc => gc.IsChecked)
+                    : child.IsItemChecked;
 
-            if (m.RemainingCount == 0)
-                ResetMemoAndDescendants(m);
+                bool childResetFires = false;
+
+                if (child.RemainingCount <= 0)
+                {
+                    // すでに 0 かつチェックありならリセット対象
+                    if (childHasCheck) childResetFires = true;
+                }
+                else
+                {
+                    child.RemainingCount--;
+                    if (child.RemainingCount == 0) childResetFires = true;
+                }
+
+                if (childResetFires)
+                {
+                    // 子自身をリセット
+                    child.IsItemChecked = false;
+
+                    // 孫は子のリセット発火時にのみ自身の RemainingCount を減算
+                    foreach (var grandchild in child.Children)
+                    {
+                        if (grandchild.RemainingCount <= 0)
+                        {
+                            if (grandchild.IsItemChecked)
+                                grandchild.IsItemChecked = false;
+                        }
+                        else
+                        {
+                            grandchild.RemainingCount--;
+                            if (grandchild.RemainingCount == 0)
+                                grandchild.IsItemChecked = false;
+                        }
+                    }
+                    child.UpdateStatusFromChildren();
+                }
+            }
+            m.UpdateStatusFromChildren();
         }
         AppStateService.Save(_state);
     }
 
+    private static void ResetChildAndDescendants(MemoItem child)
+    {
+        child.IsItemChecked = false;
+        foreach (var gc in child.Children)
+            gc.IsItemChecked = false;
+        child.UpdateStatusFromChildren();
+    }
+
+    /// <summary>
+    /// 親（トップレベル）自身のみリセットする。
+    /// 子・孫は ProcessReset 内の各ループが RemainingCount に基づいて独立して管理するため
+    /// ここでは手を付けない。
+    /// </summary>
     private static void ResetMemoAndDescendants(MemoItem m)
     {
-        m.IsItemChecked = false;
-        foreach (var child in m.Children)
+        if (!m.IsGroup)
         {
-            child.IsItemChecked = false;
-            foreach (var grandchild in child.Children)
-                grandchild.IsItemChecked = false;
-            child.UpdateStatusFromChildren();
+            m.IsItemChecked = false;
         }
+        // IsGroup の場合は子のチェック状態によって IsChecked が決まるため
+        // 子をリセットせずに UpdateStatusFromChildren のみ呼ぶ
         m.UpdateStatusFromChildren();
     }
 
@@ -238,6 +297,12 @@ public partial class MainWindow : Window
 
     private void HandleChildCheckChange(MemoItem child)
     {
+        // 子自身が単体でチェックされた、またはグループ子の全孫がチェックされた
+        if (!child.IsGroup && child.IsItemChecked)
+            child.RemainingCount = child.ResetCount;
+        else if (child.IsGroup && child.IsChecked)
+            child.RemainingCount = child.ResetCount;
+
         var parent = _state.Memos.FirstOrDefault(m => m.Children.Contains(child));
         if (parent != null)
         {
@@ -256,6 +321,10 @@ public partial class MainWindow : Window
 
     private void HandleGrandChildCheckChange(MemoItem grandchild)
     {
+        // 孫自身のチェック完了時に RemainingCount をリセット
+        if (grandchild.IsItemChecked)
+            grandchild.RemainingCount = grandchild.ResetCount;
+
         MemoItem? parentChild = null;
         MemoItem? parent = null;
         foreach (var m in _state.Memos)
@@ -272,7 +341,12 @@ public partial class MainWindow : Window
             if (parent != null) break;
         }
 
-        parentChild?.UpdateStatusFromChildren();
+        if (parentChild != null)
+        {
+            parentChild.UpdateStatusFromChildren();
+            if (parentChild.IsGroup && parentChild.IsChecked)
+                parentChild.RemainingCount = parentChild.ResetCount;
+        }
         if (parent != null)
         {
             parent.UpdateStatusFromChildren();
