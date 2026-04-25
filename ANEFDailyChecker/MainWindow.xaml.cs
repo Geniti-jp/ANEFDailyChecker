@@ -127,13 +127,22 @@ public partial class MainWindow : Window
     private void ProcessMissedTimers()
     {
         var now = DateTime.Now;
+
+        // 経過時間の基準は「前回アプリを閉じた時刻」。
+        // StartedAt（タイマー開始時刻）を使うと、閉じる前にすでに動いていた分も
+        // 二重に減算されてしまうため使用しない。
+        if (_state.LastClosedAt == null) return;
+
+        double elapsedSec = (now - _state.LastClosedAt.Value).TotalSeconds;
+        if (elapsedSec <= 0) return;
+
         bool changed = false;
 
         foreach (var tc in _state.Timers)
         {
-            if (tc.State != TimerState.Running || tc.StartedAt == null) continue;
+            if (tc.State != TimerState.Running) continue;
 
-            int elapsed = (int)Math.Min((now - tc.StartedAt.Value).TotalSeconds, tc.RemainingSeconds + 1);
+            int elapsed = (int)Math.Min(elapsedSec, tc.RemainingSeconds + 1);
             if (elapsed <= 0) continue;
 
             tc.RemainingSeconds -= elapsed;
@@ -143,12 +152,13 @@ public partial class MainWindow : Window
             {
                 tc.State = TimerState.Stopped;
                 tc.StartedAt = null;
-                PlayTimerSound(tc);
+                // 音声は ShowTimerFinished 内で鳴らす。ここで直接呼ぶと二重再生になる。
                 var captured = tc;
                 Dispatcher.InvokeAsync(() => ShowTimerFinished(captured));
             }
             else
             {
+                // 再起動後も Tick が正しく動くよう StartedAt を現在時刻に更新
                 tc.StartedAt = now;
             }
         }
