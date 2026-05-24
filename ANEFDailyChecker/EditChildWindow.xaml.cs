@@ -31,6 +31,7 @@ public partial class EditChildWindow : Window
 
         ItemTextBox.Text = item.Text;
         ResetCountBox.Text = item.ResetCount.ToString();
+        RemainingCountBox.Text = item.RemainingCount.ToString();
         GroupCheckBox.IsChecked = item.IsGroup;
         DayOfWeekCheckBox.IsChecked = item.UseDayOfWeekMode;
         GrandChildListBox.ItemsSource = item.Children;
@@ -133,13 +134,19 @@ public partial class EditChildWindow : Window
             return;
         }
 
+        if (!int.TryParse(RemainingCountBox.Text, out int remainingCount) || remainingCount < 0 || remainingCount > resetCount)
+        {
+            MessageBox.Show($"次回までの日数は 0 〜 {resetCount} の整数で入力してください。\n（0 = 今日リセット）", "入力エラー",
+                MessageBoxButton.OK, MessageBoxImage.Warning);
+            RemainingCountBox.Focus();
+            RemainingCountBox.SelectAll();
+            return;
+        }
+
         _item.Text = ItemTextBox.Text;
         _item.IsGroup = GroupCheckBox.IsChecked ?? false;
-        if (_item.ResetCount != resetCount)
-        {
-            _item.ResetCount    = resetCount;
-            _item.RemainingCount = resetCount;
-        }
+        _item.ResetCount     = resetCount;
+        _item.RemainingCount = remainingCount;
         _item.UseDayOfWeekMode = DayOfWeekCheckBox.IsChecked ?? false;
 
         _item.DayOfWeekTexts.Clear();

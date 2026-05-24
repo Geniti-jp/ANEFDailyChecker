@@ -22,12 +22,24 @@
             <TextBox x:Name="ParentTextBox"/>
         </StackPanel>
 
-        <!-- リセット日数 -->
-        <StackPanel Grid.Row="1" Orientation="Horizontal" Margin="0,0,0,10">
-            <TextBlock Text="リセット日数" VerticalAlignment="Center" Margin="0,0,8,0"/>
-            <TextBox x:Name="ResetCountBox" Width="50" VerticalAlignment="Center"/>
-            <TextBlock Text="日" VerticalAlignment="Center" Margin="4,0,0,0"/>
-        </StackPanel>
+        <!-- リセット日数 / 次回リセットまでの日数 -->
+        <Grid Grid.Row="1" Margin="0,0,0,10">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="10"/>
+                <ColumnDefinition Width="*"/>
+            </Grid.ColumnDefinitions>
+            <StackPanel Grid.Column="0" Orientation="Horizontal">
+                <TextBlock Text="リセット日数" VerticalAlignment="Center" Margin="0,0,6,0"/>
+                <TextBox x:Name="ResetCountBox" Width="44" VerticalAlignment="Center"/>
+                <TextBlock Text="日" VerticalAlignment="Center" Margin="3,0,0,0"/>
+            </StackPanel>
+            <StackPanel Grid.Column="2" Orientation="Horizontal">
+                <TextBlock Text="次回まで" VerticalAlignment="Center" Margin="0,0,6,0"/>
+                <TextBox x:Name="RemainingCountBox" Width="44" VerticalAlignment="Center"/>
+                <TextBlock Text="日" VerticalAlignment="Center" Margin="3,0,0,0"/>
+            </StackPanel>
+        </Grid>
 
         <!-- グループモード -->
         <CheckBox x:Name="GroupCheckBox" Grid.Row="2" Content="グループモードで使用する"

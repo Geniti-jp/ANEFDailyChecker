@@ -28,6 +28,16 @@ public partial class MainWindow : Window
         MemoList.ItemsSource = _state.Memos;
         TimerPanel.ItemsSource = _state.Timers;
 
+        // ウィンドウ位置・サイズを復元
+        if (_state.WindowLeft > 0 || _state.WindowTop > 0)
+        {
+            WindowStartupLocation = WindowStartupLocation.Manual;
+            Left = _state.WindowLeft;
+            Top  = _state.WindowTop;
+        }
+        if (_state.WindowWidth  >= 200) Width  = _state.WindowWidth;
+        if (_state.WindowHeight >= 100) Height = _state.WindowHeight;
+
         _lastKnownUpdateTime = GetCurrentUpdateTime(DateTime.Now);
 
         ProcessMissedResets();
@@ -38,6 +48,8 @@ public partial class MainWindow : Window
         _timer.Start();
         UpdateRemainingDisplay();
     }
+
+    private int _heartbeatCounter = 0;
 
     // ─── タイマー Tick ───────────────────────────────────────────
 
@@ -82,6 +94,15 @@ public partial class MainWindow : Window
                 Dispatcher.InvokeAsync(() => ShowTimerFinished(captured));
             }
         }
+
+        // 60秒ごとに LastHeartbeatAt を保存（強制シャットダウン対策）
+        _heartbeatCounter++;
+        if (_heartbeatCounter >= 60)
+        {
+            _heartbeatCounter = 0;
+            _state.LastHeartbeatAt = now;
+            AppStateService.Save(_state);
+        }
     }
 
     // ─── メモリセット関連 ─────────────────────────────────────────
@@ -105,12 +126,20 @@ public partial class MainWindow : Window
 
     private void ProcessMissedResets()
     {
-        if (_state.LastClosedAt == null) return;
-        var lastClosed = _state.LastClosedAt.Value;
-        var now = DateTime.Now;
-        if (now <= lastClosed) return;
+        // 強制シャットダウン対策: LastClosedAt と LastHeartbeatAt の新しい方を基準にする
+        var lastClosed = _state.LastClosedAt;
+        var lastHeartbeat = _state.LastHeartbeatAt;
 
-        var checkTime = lastClosed;
+        DateTime baseTime;
+        if (lastClosed == null && lastHeartbeat == null) return;
+        else if (lastClosed == null) baseTime = lastHeartbeat!.Value;
+        else if (lastHeartbeat == null) baseTime = lastClosed.Value;
+        else baseTime = lastClosed.Value > lastHeartbeat.Value ? lastClosed.Value : lastHeartbeat.Value;
+
+        var now = DateTime.Now;
+        if (now <= baseTime) return;
+
+        var checkTime = baseTime;
         int count = 0;
         while (count < 365)
         {
@@ -128,12 +157,17 @@ public partial class MainWindow : Window
     {
         var now = DateTime.Now;
 
-        // 経過時間の基準は「前回アプリを閉じた時刻」。
-        // StartedAt（タイマー開始時刻）を使うと、閉じる前にすでに動いていた分も
-        // 二重に減算されてしまうため使用しない。
-        if (_state.LastClosedAt == null) return;
+        // 強制シャットダウン対策: LastClosedAt と LastHeartbeatAt の新しい方を基準にする
+        var lastClosed = _state.LastClosedAt;
+        var lastHeartbeat = _state.LastHeartbeatAt;
 
-        double elapsedSec = (now - _state.LastClosedAt.Value).TotalSeconds;
+        DateTime baseTime;
+        if (lastClosed == null && lastHeartbeat == null) return;
+        else if (lastClosed == null) baseTime = lastHeartbeat!.Value;
+        else if (lastHeartbeat == null) baseTime = lastClosed.Value;
+        else baseTime = lastClosed.Value > lastHeartbeat.Value ? lastClosed.Value : lastHeartbeat.Value;
+
+        double elapsedSec = (now - baseTime).TotalSeconds;
         if (elapsedSec <= 0) return;
 
         bool changed = false;
@@ -587,6 +621,11 @@ public partial class MainWindow : Window
     protected override void OnClosed(EventArgs e)
     {
         _state.LastClosedAt = DateTime.Now;
+        _state.LastHeartbeatAt = DateTime.Now; // 正常終了時はハートビートも更新
+        _state.WindowLeft = Left;
+        _state.WindowTop = Top;
+        _state.WindowWidth = Width;
+        _state.WindowHeight = Height;
         AppStateService.Save(_state);
         base.OnClosed(e);
     }

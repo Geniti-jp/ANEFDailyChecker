@@ -15,8 +15,17 @@ public class AppState
     /// <summary>アプリを最後に閉じた日時（起動時の経過リセット計算に使用）</summary>
     public DateTime? LastClosedAt { get; set; }
 
+    /// <summary>定期保存用の最終ハートビート時刻</summary>
+    public DateTime? LastHeartbeatAt { get; set; }
+
     /// <summary>登録済みタイマー一覧</summary>
     public ObservableCollection<TimerConfig> Timers { get; set; } = new();
+
+    // ウィンドウ位置・サイズ（0 = 未保存）
+    public double WindowLeft { get; set; } = 0;
+    public double WindowTop { get; set; } = 0;
+    public double WindowWidth { get; set; } = 0;
+    public double WindowHeight { get; set; } = 0;
 }
 
 public static class AppStateService

@@ -31,10 +31,12 @@ public partial class TimerInputWindow : Window
     {
         var text = TimeBox.Text.Trim();
 
-        // HH:MM または MM 形式を受け付ける
-        if (Regex.IsMatch(text, @"^\d{1,2}:\d{2}$"))
+        // 区切り文字（:・.。、・ 等）を正規化して HH:MM として試みる
+        var normalized = Regex.Replace(text, @"[：:．.。、・,，\s]+", ":");
+
+        if (Regex.IsMatch(normalized, @"^\d{1,2}:\d{1,2}$"))
         {
-            var parts = text.Split(':');
+            var parts = normalized.Split(':');
             int h = int.Parse(parts[0]);
             int m = int.Parse(parts[1]);
             if (m > 59 || (h == 0 && m == 0))
@@ -65,7 +67,7 @@ public partial class TimerInputWindow : Window
     private void ShowError()
     {
         MessageBox.Show(
-            "HH:MM 形式（例: 01:30）または分数（例: 90）で入力してください。",
+            "HH:MM 形式（例: 01:30 / 1.30 / 1。30）または分数（例: 90）で入力してください。",
             "入力エラー", MessageBoxButton.OK, MessageBoxImage.Warning);
         TimeBox.Focus();
         TimeBox.SelectAll();
