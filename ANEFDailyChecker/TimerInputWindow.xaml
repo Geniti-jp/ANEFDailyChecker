@@ -1,11 +1,40 @@
 <Window x:Class="ANEFDailyChecker.TimerInputWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Title="タイマー時間を入力" Width="280" Height="200"
+        Title="タイマー時間を入力" Width="300" Height="240"
         WindowStartupLocation="CenterOwner"
         ResizeMode="NoResize">
+    <Window.Resources>
+        <!-- Word/Excel風スピナーボタンのスタイル -->
+        <Style x:Key="SpinnerBtn" TargetType="RepeatButton">
+            <Setter Property="Width" Value="18"/>
+            <Setter Property="Padding" Value="0"/>
+            <Setter Property="FontSize" Value="8"/>
+            <Setter Property="Focusable" Value="False"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="RepeatButton">
+                        <Border x:Name="Bd" BorderBrush="#ABADB3" BorderThickness="1"
+                                Background="#F0F0F0">
+                            <ContentPresenter HorizontalAlignment="Center"
+                                              VerticalAlignment="Center"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Bd" Property="Background" Value="#DCE4EE"/>
+                            </Trigger>
+                            <Trigger Property="IsPressed" Value="True">
+                                <Setter TargetName="Bd" Property="Background" Value="#C2D5EA"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+    </Window.Resources>
     <Grid Margin="16">
         <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="Auto"/>
@@ -14,18 +43,78 @@
         </Grid.RowDefinitions>
 
         <TextBlock x:Name="TitleLabel" Grid.Row="0"
-                   Text="" FontWeight="Bold"
-                   Margin="0,0,0,8"/>
+                   FontWeight="Bold" Margin="0,0,0,10"/>
 
-        <TextBlock Grid.Row="1" Text="時間を入力してください（HH:MM）"
+        <!-- 通常モード用ラベル -->
+        <TextBlock x:Name="NormalLabel" Grid.Row="1"
+                   Text="時間を入力してください（HH:MM）"
                    Margin="0,0,0,6"/>
 
+        <!-- 回復モード用: Wordライク スピナー行 -->
+        <StackPanel x:Name="RecoverySpinPanel" Grid.Row="1"
+                    Orientation="Horizontal" Margin="0,0,0,8"
+                    Visibility="Collapsed">
+            <TextBlock Text="回復数：" VerticalAlignment="Center" Margin="0,0,6,0"/>
+            <!-- テキストボックス＋右側縦並び上下ボタン -->
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="50"/>
+                    <ColumnDefinition Width="18"/>
+                </Grid.ColumnDefinitions>
+                <TextBox x:Name="RecoveryCountBox"
+                         Grid.Column="0"
+                         Height="26"
+                         TextAlignment="Right"
+                         VerticalContentAlignment="Center"
+                         Padding="2,0,2,0"
+                         Text="0"
+                         BorderThickness="1,1,0,1"
+                         BorderBrush="#ABADB3"
+                         PreviewTextInput="RecoveryCountBox_PreviewTextInput"
+                         TextChanged="RecoveryCountBox_TextChanged"
+                         MouseWheel="RecoveryCountBox_MouseWheel"
+                         LostFocus="RecoveryCountBox_LostFocus"/>
+                <Grid Grid.Column="1">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="*"/>
+                        <RowDefinition Height="*"/>
+                    </Grid.RowDefinitions>
+                    <RepeatButton Grid.Row="0" Content="▲"
+                                  Style="{StaticResource SpinnerBtn}"
+                                  BorderThickness="1,1,1,0"
+                                  Click="SpinUp"/>
+                    <RepeatButton Grid.Row="1" Content="▼"
+                                  Style="{StaticResource SpinnerBtn}"
+                                  BorderThickness="1,0,1,1"
+                                  Click="SpinDown"/>
+                </Grid>
+            </Grid>
+            <TextBlock x:Name="IntervalLabel" VerticalAlignment="Center"
+                       Margin="10,0,0,0" Foreground="Gray" FontSize="11"/>
+        </StackPanel>
+
+        <!-- 通常モード用テキストボックス -->
         <TextBox x:Name="TimeBox" Grid.Row="2"
                  FontSize="16" TextAlignment="Center"
-                 MaxLength="5"
+                 MaxLength="8"
                  KeyDown="TimeBox_KeyDown"/>
 
-        <Button Content="開始" Grid.Row="4"
+        <!-- 回復モード用 mm:ss 行 -->
+        <StackPanel x:Name="RecoveryTimePanel" Grid.Row="2"
+                    Orientation="Horizontal"
+                    Visibility="Collapsed">
+            <TextBlock Text="追加時間（MM:SS）：" VerticalAlignment="Center" Margin="0,0,6,0"/>
+            <TextBox x:Name="RecoveryTimeBox" Width="80" FontSize="14"
+                     TextAlignment="Center" MaxLength="8"
+                     KeyDown="TimeBox_KeyDown"/>
+        </StackPanel>
+
+        <!-- 合計表示（回復モードのみ） -->
+        <TextBlock x:Name="TotalLabel" Grid.Row="3"
+                   Margin="0,8,0,0" FontSize="11" Foreground="#555"
+                   Visibility="Collapsed"/>
+
+        <Button Content="開始" Grid.Row="5"
                 Height="30" Click="OkClick"/>
     </Grid>
 </Window>

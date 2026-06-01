@@ -34,13 +34,38 @@ public class TimerConfig : INotifyPropertyChanged
         set
         {
             _isFixedMode = value;
+            if (value) _isRecoveryMode = false;
             OnPropertyChanged();
+            OnPropertyChanged(nameof(IsInputMode));
+            OnPropertyChanged(nameof(IsRecoveryMode));
+            OnPropertyChanged(nameof(DisplayText));
+        }
+    }
+
+    private bool _isRecoveryMode = false;
+    private int _recoveryIntervalSeconds = 430; // デフォルト7分10秒
+
+    public bool IsRecoveryMode
+    {
+        get => _isRecoveryMode;
+        set
+        {
+            _isRecoveryMode = value;
+            if (value) _isFixedMode = false;
+            OnPropertyChanged();
+            OnPropertyChanged(nameof(IsFixedMode));
             OnPropertyChanged(nameof(IsInputMode));
             OnPropertyChanged(nameof(DisplayText));
         }
     }
 
-    [JsonIgnore] public bool IsInputMode => !IsFixedMode;
+    public int RecoveryIntervalSeconds
+    {
+        get => _recoveryIntervalSeconds;
+        set { _recoveryIntervalSeconds = Math.Max(1, value); OnPropertyChanged(); }
+    }
+
+    [JsonIgnore] public bool IsInputMode => !IsFixedMode && !IsRecoveryMode;
 
     public int FixedMinutes
     {
@@ -122,12 +147,22 @@ public class TimerConfig : INotifyPropertyChanged
         {
             if (IsStopped)
             {
+                if (IsRecoveryMode)
+                {
+                    int h = RecoveryIntervalSeconds / 3600;
+                    int m = (RecoveryIntervalSeconds % 3600) / 60;
+                    int s = RecoveryIntervalSeconds % 60;
+                    string interval = h > 0
+                        ? $"{h}時間{m:D2}分{s:D2}秒/回復"
+                        : s > 0 ? $"{m}分{s:D2}秒/回復" : $"{m}分/回復";
+                    return interval;
+                }
                 int mins = IsFixedMode ? FixedMinutes : CurrentSetMinutes;
                 if (mins <= 0) return IsInputMode ? "(時間を入力)" : "0分";
-                int h = mins / 60, m = mins % 60;
-                if (h > 0 && m > 0) return $"{h}時間{m}分";
-                if (h > 0) return $"{h}時間";
-                return $"{m}分";
+                int h2 = mins / 60, m2 = mins % 60;
+                if (h2 > 0 && m2 > 0) return $"{h2}時間{m2}分";
+                if (h2 > 0) return $"{h2}時間";
+                return $"{m2}分";
             }
             else
             {

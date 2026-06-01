@@ -95,9 +95,9 @@ public partial class MainWindow : Window
             }
         }
 
-        // 60秒ごとに LastHeartbeatAt を保存（強制シャットダウン対策）
+        // 20秒ごとに LastHeartbeatAt を保存（強制シャットダウン対策）
         _heartbeatCounter++;
-        if (_heartbeatCounter >= 60)
+        if (_heartbeatCounter >= 20)
         {
             _heartbeatCounter = 0;
             _state.LastHeartbeatAt = now;
@@ -561,20 +561,29 @@ public partial class MainWindow : Window
 
     private void StartTimer(TimerConfig tc)
     {
-        int minutes;
+        int totalSeconds;
         if (tc.IsFixedMode)
         {
-            minutes = tc.FixedMinutes;
+            totalSeconds = tc.FixedMinutes * 60;
+            tc.CurrentSetMinutes = tc.FixedMinutes;
+        }
+        else if (tc.IsRecoveryMode)
+        {
+            var inputWin = new TimerInputWindow(tc.Name, timerMode: TimerInputMode.Recovery,
+                recoveryIntervalSeconds: tc.RecoveryIntervalSeconds) { Owner = this };
+            if (inputWin.ShowDialog() != true) return;
+            totalSeconds = inputWin.InputSeconds;
+            tc.CurrentSetMinutes = totalSeconds / 60;
         }
         else
         {
-            var inputWin = new TimerInputWindow(tc.Name) { Owner = this };
+            var inputWin = new TimerInputWindow(tc.Name, timerMode: TimerInputMode.Input) { Owner = this };
             if (inputWin.ShowDialog() != true) return;
-            minutes = inputWin.InputMinutes;
-            tc.CurrentSetMinutes = minutes;
+            totalSeconds = inputWin.InputSeconds;
+            tc.CurrentSetMinutes = totalSeconds / 60;
         }
 
-        tc.RemainingSeconds = minutes * 60;
+        tc.RemainingSeconds = totalSeconds;
         tc.StartedAt = DateTime.Now;
         tc.State = TimerState.Running;
         AppStateService.Save(_state);
