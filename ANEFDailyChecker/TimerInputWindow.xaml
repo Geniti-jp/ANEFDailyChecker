@@ -54,7 +54,7 @@
         <StackPanel x:Name="RecoverySpinPanel" Grid.Row="1"
                     Orientation="Horizontal" Margin="0,0,0,8"
                     Visibility="Collapsed">
-            <TextBlock Text="回復数：" VerticalAlignment="Center" Margin="0,0,6,0"/>
+            <TextBlock x:Name="RecoveryCountLabel" Text="回復数：" VerticalAlignment="Center" Margin="0,0,6,0"/>
             <!-- テキストボックス＋右側縦並び上下ボタン -->
             <Grid>
                 <Grid.ColumnDefinitions>
@@ -103,7 +103,7 @@
         <StackPanel x:Name="RecoveryTimePanel" Grid.Row="2"
                     Orientation="Horizontal"
                     Visibility="Collapsed">
-            <TextBlock Text="追加時間（MM:SS）：" VerticalAlignment="Center" Margin="0,0,6,0"/>
+            <TextBlock x:Name="RecoveryTimeLabel" Text="追加時間（MM:SS）：" VerticalAlignment="Center" Margin="0,0,6,0"/>
             <TextBox x:Name="RecoveryTimeBox" Width="80" FontSize="14"
                      TextAlignment="Center" MaxLength="8"
                      KeyDown="TimeBox_KeyDown"/>

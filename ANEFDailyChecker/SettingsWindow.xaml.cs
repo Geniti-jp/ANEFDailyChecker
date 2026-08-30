@@ -13,9 +13,17 @@ public partial class SettingsWindow : Window
     public SettingsWindow(AppState state)
     {
         InitializeComponent();
+        if (Application.Current.MainWindow is Window mw && mw != this && mw.Topmost) Topmost = true;
+
         _state = state;
         MemoList.ItemsSource = _state.Memos;
         ResetTimeBox.Text = _state.ResetTime.ToString(@"hh\:mm");
+        TopmostFeatureCheckBox.IsChecked = _state.EnableTopmostFeature;
+    }
+
+    private void OpenTimerSettings(object sender, RoutedEventArgs e)
+    {
+        new TimerSettingsWindow(_state) { Owner = this }.ShowDialog();
     }
 
     private void AddMemo(object sender, RoutedEventArgs e)
@@ -94,6 +102,7 @@ public partial class SettingsWindow : Window
             return;
         }
         _state.ResetTime = ts;
+        _state.EnableTopmostFeature = TopmostFeatureCheckBox.IsChecked ?? false;
         base.OnClosing(e);
     }
 }

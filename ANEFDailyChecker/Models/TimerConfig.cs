@@ -34,16 +34,19 @@ public class TimerConfig : INotifyPropertyChanged
         set
         {
             _isFixedMode = value;
-            if (value) _isRecoveryMode = false;
+            if (value) { _isRecoveryMode = false; _isFullRecoveryMode = false; }
             OnPropertyChanged();
             OnPropertyChanged(nameof(IsInputMode));
             OnPropertyChanged(nameof(IsRecoveryMode));
+            OnPropertyChanged(nameof(IsFullRecoveryMode));
             OnPropertyChanged(nameof(DisplayText));
         }
     }
 
     private bool _isRecoveryMode = false;
+    private bool _isFullRecoveryMode = false;
     private int _recoveryIntervalSeconds = 430; // デフォルト7分10秒
+    private int _recoveryMaxValue = 100;
 
     public bool IsRecoveryMode
     {
@@ -51,9 +54,26 @@ public class TimerConfig : INotifyPropertyChanged
         set
         {
             _isRecoveryMode = value;
-            if (value) _isFixedMode = false;
+            if (value) { _isFixedMode = false; _isFullRecoveryMode = false; }
             OnPropertyChanged();
             OnPropertyChanged(nameof(IsFixedMode));
+            OnPropertyChanged(nameof(IsInputMode));
+            OnPropertyChanged(nameof(IsFullRecoveryMode));
+            OnPropertyChanged(nameof(DisplayText));
+        }
+    }
+
+    /// <summary>完全回復計算モード：最大値と現在値・端数から完全回復までの時間を自動計算する。</summary>
+    public bool IsFullRecoveryMode
+    {
+        get => _isFullRecoveryMode;
+        set
+        {
+            _isFullRecoveryMode = value;
+            if (value) { _isFixedMode = false; _isRecoveryMode = false; }
+            OnPropertyChanged();
+            OnPropertyChanged(nameof(IsFixedMode));
+            OnPropertyChanged(nameof(IsRecoveryMode));
             OnPropertyChanged(nameof(IsInputMode));
             OnPropertyChanged(nameof(DisplayText));
         }
@@ -62,10 +82,17 @@ public class TimerConfig : INotifyPropertyChanged
     public int RecoveryIntervalSeconds
     {
         get => _recoveryIntervalSeconds;
-        set { _recoveryIntervalSeconds = Math.Max(1, value); OnPropertyChanged(); }
+        set { _recoveryIntervalSeconds = Math.Max(1, value); OnPropertyChanged(); OnPropertyChanged(nameof(DisplayText)); }
     }
 
-    [JsonIgnore] public bool IsInputMode => !IsFixedMode && !IsRecoveryMode;
+    /// <summary>完全回復計算モードの最大値（例: スタミナの上限）。</summary>
+    public int RecoveryMaxValue
+    {
+        get => _recoveryMaxValue;
+        set { _recoveryMaxValue = Math.Max(1, value); OnPropertyChanged(); OnPropertyChanged(nameof(DisplayText)); }
+    }
+
+    [JsonIgnore] public bool IsInputMode => !IsFixedMode && !IsRecoveryMode && !IsFullRecoveryMode;
 
     public int FixedMinutes
     {
@@ -147,7 +174,7 @@ public class TimerConfig : INotifyPropertyChanged
         {
             if (IsStopped)
             {
-                if (IsRecoveryMode)
+                if (IsRecoveryMode || IsFullRecoveryMode)
                 {
                     int h = RecoveryIntervalSeconds / 3600;
                     int m = (RecoveryIntervalSeconds % 3600) / 60;
@@ -155,7 +182,7 @@ public class TimerConfig : INotifyPropertyChanged
                     string interval = h > 0
                         ? $"{h}時間{m:D2}分{s:D2}秒/回復"
                         : s > 0 ? $"{m}分{s:D2}秒/回復" : $"{m}分/回復";
-                    return interval;
+                    return IsFullRecoveryMode ? $"{interval}（最大{RecoveryMaxValue}）" : interval;
                 }
                 int mins = IsFixedMode ? FixedMinutes : CurrentSetMinutes;
                 if (mins <= 0) return IsInputMode ? "(時間を入力)" : "0分";

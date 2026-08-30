@@ -26,6 +26,12 @@ public class AppState
     public double WindowTop { get; set; } = 0;
     public double WindowWidth { get; set; } = 0;
     public double WindowHeight { get; set; } = 0;
+
+    /// <summary>設定画面のチェックボックス：現在時刻表示・最前面固定機能そのものの有効/無効。</summary>
+    public bool EnableTopmostFeature { get; set; } = false;
+
+    /// <summary>メイン画面の「最前面」チェックボックスの状態。</summary>
+    public bool IsAlwaysOnTop { get; set; } = false;
 }
 
 public static class AppStateService

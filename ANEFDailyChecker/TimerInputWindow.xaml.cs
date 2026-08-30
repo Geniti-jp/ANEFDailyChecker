@@ -4,12 +4,13 @@ using System.Windows.Input;
 
 namespace ANEFDailyChecker;
 
-public enum TimerInputMode { Input, Recovery }
+public enum TimerInputMode { Input, Recovery, FullRecovery }
 
 public partial class TimerInputWindow : Window
 {
     private readonly TimerInputMode _mode;
     private readonly int _recoveryIntervalSeconds;
+    private readonly int _maxValue;
 
     /// <summary>入力された合計秒数（OK 時に設定）</summary>
     public int InputSeconds { get; private set; }
@@ -19,15 +20,19 @@ public partial class TimerInputWindow : Window
 
     public TimerInputWindow(string timerName,
         TimerInputMode timerMode = TimerInputMode.Input,
-        int recoveryIntervalSeconds = 0)
+        int recoveryIntervalSeconds = 0,
+        int maxValue = 0)
     {
         InitializeComponent();
+        if (Application.Current.MainWindow is Window mw && mw != this && mw.Topmost) Topmost = true;
+
         _mode = timerMode;
         _recoveryIntervalSeconds = recoveryIntervalSeconds;
+        _maxValue = maxValue;
 
         TitleLabel.Text = timerName;
 
-        if (_mode == TimerInputMode.Recovery)
+        if (_mode == TimerInputMode.Recovery || _mode == TimerInputMode.FullRecovery)
         {
             // 回復モード用UIを表示、通常UIを隠す
             NormalLabel.Visibility = Visibility.Collapsed;
@@ -36,8 +41,18 @@ public partial class TimerInputWindow : Window
             RecoveryTimePanel.Visibility = Visibility.Visible;
             TotalLabel.Visibility = Visibility.Visible;
 
-            // 1回復の時間をラベル表示
-            IntervalLabel.Text = $"× {FormatSeconds(_recoveryIntervalSeconds)}/回";
+            if (_mode == TimerInputMode.FullRecovery)
+            {
+                RecoveryCountLabel.Text = "現在の値：";
+                RecoveryTimeLabel.Text = "端数（MM:SS）：";
+                IntervalLabel.Text = $"× {FormatSeconds(_recoveryIntervalSeconds)}/回復（最大{_maxValue}）";
+            }
+            else
+            {
+                RecoveryCountLabel.Text = "回復数：";
+                RecoveryTimeLabel.Text = "追加時間（MM:SS）：";
+                IntervalLabel.Text = $"× {FormatSeconds(_recoveryIntervalSeconds)}/回";
+            }
 
             UpdateTotalLabel();
             RecoveryCountBox.Focus();
@@ -130,9 +145,19 @@ public partial class TimerInputWindow : Window
 
         int count = GetSpinValue();
         var parsed = ParseTimeInput(RecoveryTimeBox.Text ?? "", allowSeconds: true);
-        int addSec = parsed ?? 0;
-        int total = count * _recoveryIntervalSeconds + addSec;
-        TotalLabel.Text = $"合計: {count}回 × {FormatSeconds(_recoveryIntervalSeconds)} + {FormatSeconds(addSec)} = {FormatSeconds(total)}";
+        int sec2 = parsed ?? 0;
+
+        if (_mode == TimerInputMode.FullRecovery)
+        {
+            int remain = Math.Max(0, _maxValue - count - 1);
+            int total = Math.Max(0, remain * _recoveryIntervalSeconds + sec2);
+            TotalLabel.Text = $"合計: ({_maxValue}-{count}-1)回 × {FormatSeconds(_recoveryIntervalSeconds)} + {FormatSeconds(sec2)} = {FormatSeconds(total)}";
+        }
+        else
+        {
+            int total = count * _recoveryIntervalSeconds + sec2;
+            TotalLabel.Text = $"合計: {count}回 × {FormatSeconds(_recoveryIntervalSeconds)} + {FormatSeconds(sec2)} = {FormatSeconds(total)}";
+        }
     }
 
     // ─── キー・ボタン ────────────────────────────────────────────────────
@@ -149,6 +174,11 @@ public partial class TimerInputWindow : Window
         if (_mode == TimerInputMode.Recovery)
         {
             TryCommitRecovery();
+            return;
+        }
+        if (_mode == TimerInputMode.FullRecovery)
+        {
+            TryCommitFullRecovery();
             return;
         }
 
@@ -199,6 +229,49 @@ public partial class TimerInputWindow : Window
         if (total < 1)
         {
             ShowError("合計時間が 0 秒になっています。回復数または追加時間を確認してください。");
+            return;
+        }
+
+        InputSeconds = total;
+        DialogResult = true;
+    }
+
+    /// <summary>合計 = (最大値 - 現在の値 - 1) × 回復間隔 + 端数（端数 = 次回復までの残り時間）</summary>
+    private void TryCommitFullRecovery()
+    {
+        int current = GetSpinValue();
+        if (current >= _maxValue)
+        {
+            ShowError($"現在の値は最大値（{_maxValue}）未満で入力してください。");
+            RecoveryCountBox.Focus(); RecoveryCountBox.SelectAll();
+            return;
+        }
+
+        int fracSec = 0;
+        string fracText = RecoveryTimeBox.Text.Trim();
+        if (!string.IsNullOrEmpty(fracText))
+        {
+            var parsed = ParseTimeInput(fracText, allowSeconds: true);
+            if (parsed == null)
+            {
+                ShowError("端数の形式が正しくありません。\n例: 1:30（1分30秒）/ 90（秒数）\n区切り文字として使用できる文字: : ： . ． 。 、 ・ , ， / ／ * ＊ - － + ＋ スペース");
+                RecoveryTimeBox.Focus(); RecoveryTimeBox.SelectAll();
+                return;
+            }
+            fracSec = parsed.Value;
+        }
+
+        if (fracSec > _recoveryIntervalSeconds)
+        {
+            ShowError("端数は1回復あたりの時間以下で入力してください。");
+            RecoveryTimeBox.Focus(); RecoveryTimeBox.SelectAll();
+            return;
+        }
+
+        int total = (_maxValue - current - 1) * _recoveryIntervalSeconds + fracSec;
+        if (total < 1)
+        {
+            ShowError("合計時間が 0 秒になっています。入力内容を確認してください。");
             return;
         }
 

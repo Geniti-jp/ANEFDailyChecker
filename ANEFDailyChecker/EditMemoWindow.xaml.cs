@@ -1,3 +1,4 @@
+using System.Text.RegularExpressions;
 using System.Windows;
 using System.Windows.Controls;
 using ANEFDailyChecker.Models;
@@ -12,6 +13,8 @@ public partial class EditMemoWindow : Window
     public EditMemoWindow(MemoItem item)
     {
         InitializeComponent();
+        if (Application.Current.MainWindow is Window mw && mw != this && mw.Topmost) Topmost = true;
+
         _item = item;
 
         _dayBoxes = new[] { SunBox, MonBox, TueBox, WedBox, ThuBox, FriBox, SatBox };
@@ -19,6 +22,7 @@ public partial class EditMemoWindow : Window
         ParentTextBox.Text = item.Text;
         ResetCountBox.Text = item.ResetCount.ToString();
         RemainingCountBox.Text = item.RemainingCount.ToString();
+        ResetOffsetBox.Text = FormatOffset(item.ResetOffsetMinutes);
         GroupCheckBox.IsChecked = item.IsGroup;
         DayOfWeekCheckBox.IsChecked = item.UseDayOfWeekMode;
         ChildListBox.ItemsSource = item.Children;
@@ -30,6 +34,26 @@ public partial class EditMemoWindow : Window
         }
 
         RefreshVisibility();
+    }
+
+    private static string FormatOffset(int minutes)
+    {
+        string sign = minutes < 0 ? "-" : "+";
+        int abs = Math.Abs(minutes);
+        return $"{sign}{abs / 60:D2}:{abs % 60:D2}";
+    }
+
+    private static int? ParseOffset(string text)
+    {
+        var m = Regex.Match(text.Trim(), @"^([+-]?)(\d{1,2}):(\d{2})$");
+        if (!m.Success) return null;
+        int hh = int.Parse(m.Groups[2].Value);
+        int mm = int.Parse(m.Groups[3].Value);
+        if (hh > 23 || mm > 59) return null;
+        int total = hh * 60 + mm;
+        if (m.Groups[1].Value == "-") total = -total;
+        if (total < -1439 || total > 1439) return null;
+        return total;
     }
 
     private void GroupModeChanged(object sender, RoutedEventArgs e) => RefreshVisibility();
@@ -78,7 +102,12 @@ public partial class EditMemoWindow : Window
 
     private void DeleteChild(object sender, RoutedEventArgs e)
     {
-        if (ChildListBox.SelectedItem is MemoItem target) _item.Children.Remove(target);
+        if (ChildListBox.SelectedItem is MemoItem target)
+        {
+            if (MessageBox.Show($"「{target.Text}」を削除しますか？", "確認",
+                MessageBoxButton.YesNo) == MessageBoxResult.Yes)
+                _item.Children.Remove(target);
+        }
     }
 
     private void MoveChildUp(object sender, RoutedEventArgs e)
@@ -125,12 +154,23 @@ public partial class EditMemoWindow : Window
             return;
         }
 
+        var offset = ParseOffset(ResetOffsetBox.Text);
+        if (offset == null)
+        {
+            MessageBox.Show("リセット時刻オフセットは +hh:mm または -hh:mm 形式で入力してください。\n（例: +01:00 / -00:30 / 範囲: -23:59 〜 +23:59）", "入力エラー",
+                MessageBoxButton.OK, MessageBoxImage.Warning);
+            ResetOffsetBox.Focus();
+            ResetOffsetBox.SelectAll();
+            return;
+        }
+
         _item.Text    = ParentTextBox.Text;
         _item.IsGroup = GroupCheckBox.IsChecked ?? false;
         _item.UseDayOfWeekMode = DayOfWeekCheckBox.IsChecked ?? false;
 
         _item.ResetCount     = resetCount;
         _item.RemainingCount = remainingCount;
+        _item.ResetOffsetMinutes = offset.Value;
 
         // 曜日別テキストを保存（空欄はキーを削除）
         _item.DayOfWeekTexts.Clear();

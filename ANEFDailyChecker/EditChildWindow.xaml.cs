@@ -17,6 +17,8 @@ public partial class EditChildWindow : Window
     public EditChildWindow(MemoItem item, bool showGroupMode = true)
     {
         InitializeComponent();
+        if (Application.Current.MainWindow is Window mw && mw != this && mw.Topmost) Topmost = true;
+
         _item = item;
 
         _dayBoxes = new[] { SunBox, MonBox, TueBox, WedBox, ThuBox, FriBox, SatBox };
@@ -94,7 +96,11 @@ public partial class EditChildWindow : Window
     private void DeleteGrandChild(object sender, RoutedEventArgs e)
     {
         if (GrandChildListBox.SelectedItem is MemoItem target)
-            _item.Children.Remove(target);
+        {
+            if (MessageBox.Show($"「{target.Text}」を削除しますか？", "確認",
+                MessageBoxButton.YesNo) == MessageBoxResult.Yes)
+                _item.Children.Remove(target);
+        }
     }
 
     private void MoveGrandChildUp(object sender, RoutedEventArgs e)

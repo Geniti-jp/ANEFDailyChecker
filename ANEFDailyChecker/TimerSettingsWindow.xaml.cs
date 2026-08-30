@@ -11,6 +11,8 @@ public partial class TimerSettingsWindow : Window
     public TimerSettingsWindow(AppState state)
     {
         InitializeComponent();
+        if (Application.Current.MainWindow is Window mw && mw != this && mw.Topmost) Topmost = true;
+
         _state = state;
         TimerList.ItemsSource = _state.Timers;
     }

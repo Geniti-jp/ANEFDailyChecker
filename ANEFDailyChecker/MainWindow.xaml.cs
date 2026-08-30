@@ -15,7 +15,7 @@ public partial class MainWindow : Window
 {
     private AppState _state;
     private readonly DispatcherTimer _timer = new();
-    private DateTime _lastKnownUpdateTime;
+    private readonly Dictionary<MemoItem, DateTime> _lastKnownResetBoundary = new();
     private DateTime _lastKnownDate = DateTime.Today;
 
     private static readonly string BuiltinSoundFile =
@@ -38,10 +38,12 @@ public partial class MainWindow : Window
         if (_state.WindowWidth  >= 200) Width  = _state.WindowWidth;
         if (_state.WindowHeight >= 100) Height = _state.WindowHeight;
 
-        _lastKnownUpdateTime = GetCurrentUpdateTime(DateTime.Now);
+        ResyncResetBoundaries();
 
         ProcessMissedResets();
         ProcessMissedTimers();
+
+        ApplyTopmostRowVisibility();
 
         _timer.Interval = TimeSpan.FromSeconds(1);
         _timer.Tick += TimerTick;
@@ -56,14 +58,25 @@ public partial class MainWindow : Window
     private void TimerTick(object? sender, EventArgs e)
     {
         var now = DateTime.Now;
-        var currentUpdateTime = GetCurrentUpdateTime(now);
         UpdateRemainingDisplay();
+        CurrentTimeText.Text = "現在時刻 " + now.ToString("HH:mm:ss");
 
-        if (_lastKnownUpdateTime != currentUpdateTime)
+        bool anyReset = false;
+        foreach (var m in _state.Memos)
         {
-            ProcessReset();
-            _lastKnownUpdateTime = currentUpdateTime;
+            var currentBoundary = GetCurrentUpdateTime(now, GetEffectiveResetTimeOfDay(m));
+            if (!_lastKnownResetBoundary.TryGetValue(m, out var last))
+            {
+                _lastKnownResetBoundary[m] = currentBoundary;
+            }
+            else if (last != currentBoundary)
+            {
+                ProcessResetForItem(m);
+                _lastKnownResetBoundary[m] = currentBoundary;
+                anyReset = true;
+            }
         }
+        if (anyReset) AppStateService.Save(_state);
 
         if (_lastKnownDate != DateTime.Today)
         {
@@ -110,64 +123,84 @@ public partial class MainWindow : Window
     private void UpdateRemainingDisplay()
     {
         var now = DateTime.Now;
-        var currentUpdateTime = GetCurrentUpdateTime(now);
+        var currentUpdateTime = GetCurrentUpdateTime(now, _state.ResetTime);
         var next = currentUpdateTime.AddDays(1);
         var remain = next - now;
         RemainingText.Text =
             $"次回更新まで{remain.Hours}時間{remain.Minutes}分({_state.ResetTime:hh\\:mm}更新)";
     }
 
-    private DateTime GetCurrentUpdateTime(DateTime now)
+    private DateTime GetCurrentUpdateTime(DateTime now, TimeSpan resetTimeOfDay)
     {
-        var updateTime = now.Date + _state.ResetTime;
+        var updateTime = now.Date + resetTimeOfDay;
         if (now < updateTime) updateTime = updateTime.AddDays(-1);
         return updateTime;
     }
 
-    private void ProcessMissedResets()
+    /// <summary>基準リセット時刻にメモ（親）自身のオフセットを加えた、実際のリセット時刻（時刻のみ）。</summary>
+    private TimeSpan GetEffectiveResetTimeOfDay(MemoItem parent)
     {
-        // 強制シャットダウン対策: LastClosedAt と LastHeartbeatAt の新しい方を基準にする
+        int baseMinutes = (int)_state.ResetTime.TotalMinutes;
+        int total = ((baseMinutes + parent.ResetOffsetMinutes) % 1440 + 1440) % 1440;
+        return TimeSpan.FromMinutes(total);
+    }
+
+    /// <summary>各メモ（親）の「直近処理済み境界時刻」をすべて現在時刻基準で再計算する。</summary>
+    private void ResyncResetBoundaries()
+    {
+        var now = DateTime.Now;
+        _lastKnownResetBoundary.Clear();
+        foreach (var m in _state.Memos)
+            _lastKnownResetBoundary[m] = GetCurrentUpdateTime(now, GetEffectiveResetTimeOfDay(m));
+    }
+
+    /// <summary>LastClosedAt と LastHeartbeatAt のうち新しい方（強制シャットダウン対策の基準時刻）。</summary>
+    private DateTime? GetHeartbeatBaseTime()
+    {
         var lastClosed = _state.LastClosedAt;
         var lastHeartbeat = _state.LastHeartbeatAt;
+        if (lastClosed == null && lastHeartbeat == null) return null;
+        if (lastClosed == null) return lastHeartbeat;
+        if (lastHeartbeat == null) return lastClosed;
+        return lastClosed.Value > lastHeartbeat.Value ? lastClosed.Value : lastHeartbeat.Value;
+    }
 
-        DateTime baseTime;
-        if (lastClosed == null && lastHeartbeat == null) return;
-        else if (lastClosed == null) baseTime = lastHeartbeat!.Value;
-        else if (lastHeartbeat == null) baseTime = lastClosed.Value;
-        else baseTime = lastClosed.Value > lastHeartbeat.Value ? lastClosed.Value : lastHeartbeat.Value;
+    private void ProcessMissedResets()
+    {
+        var baseTime = GetHeartbeatBaseTime();
+        if (baseTime == null) return;
 
         var now = DateTime.Now;
-        if (now <= baseTime) return;
+        if (now <= baseTime.Value) return;
 
-        var checkTime = baseTime;
-        int count = 0;
-        while (count < 365)
+        bool any = false;
+        foreach (var m in _state.Memos)
         {
-            var todayReset = checkTime.Date + _state.ResetTime;
-            DateTime nextReset = todayReset > checkTime ? todayReset : todayReset.AddDays(1);
-            if (nextReset > now) break;
-            count++;
-            checkTime = nextReset;
+            var resetTod = GetEffectiveResetTimeOfDay(m);
+            var checkTime = baseTime.Value;
+            int count = 0;
+            while (count < 365)
+            {
+                var todayReset = checkTime.Date + resetTod;
+                DateTime nextReset = todayReset > checkTime ? todayReset : todayReset.AddDays(1);
+                if (nextReset > now) break;
+                count++;
+                checkTime = nextReset;
+            }
+            for (int i = 0; i < count; i++) ProcessResetForItem(m);
+            if (count > 0) any = true;
         }
-        for (int i = 0; i < count; i++) ProcessReset();
-        if (count > 0) AppStateService.Save(_state);
+        if (any) AppStateService.Save(_state);
     }
 
     private void ProcessMissedTimers()
     {
         var now = DateTime.Now;
 
-        // 強制シャットダウン対策: LastClosedAt と LastHeartbeatAt の新しい方を基準にする
-        var lastClosed = _state.LastClosedAt;
-        var lastHeartbeat = _state.LastHeartbeatAt;
+        var baseTime = GetHeartbeatBaseTime();
+        if (baseTime == null) return;
 
-        DateTime baseTime;
-        if (lastClosed == null && lastHeartbeat == null) return;
-        else if (lastClosed == null) baseTime = lastHeartbeat!.Value;
-        else if (lastHeartbeat == null) baseTime = lastClosed.Value;
-        else baseTime = lastClosed.Value > lastHeartbeat.Value ? lastClosed.Value : lastHeartbeat.Value;
-
-        double elapsedSec = (now - baseTime).TotalSeconds;
+        double elapsedSec = (now - baseTime.Value).TotalSeconds;
         if (elapsedSec <= 0) return;
 
         bool changed = false;
@@ -214,74 +247,70 @@ public partial class MainWindow : Window
         }
     }
 
-    private void ProcessReset()
+    private static void ProcessResetForItem(MemoItem m)
     {
-        foreach (var m in _state.Memos)
-        {
-            // ── 親レベルのリセット処理 ──────────────────────────────
-            bool parentHasCheck = m.IsGroup
-                ? m.Children.Any(c => c.IsChecked || c.Children.Any(gc => gc.IsChecked))
-                : m.IsItemChecked;
+        // ── 親レベルのリセット処理 ──────────────────────────────
+        bool parentHasCheck = m.IsGroup
+            ? m.Children.Any(c => c.IsChecked || c.Children.Any(gc => gc.IsChecked))
+            : m.IsItemChecked;
 
-            if (m.RemainingCount <= 0)
+        if (m.RemainingCount <= 0)
+        {
+            if (parentHasCheck) ResetMemoAndDescendants(m);
+        }
+        else
+        {
+            m.RemainingCount--;
+            if (m.RemainingCount == 0)
+                ResetMemoAndDescendants(m);
+        }
+
+        // ── 子レベルのリセット処理 ─────────────────────────────
+        // 孫の RemainingCount は「子のリセットが発火したとき」にのみ減算する。
+        // 子が日数を残している間は孫には手を付けない。
+        foreach (var child in m.Children)
+        {
+            bool childHasCheck = child.IsGroup
+                ? child.Children.Any(gc => gc.IsChecked)
+                : child.IsItemChecked;
+
+            bool childResetFires = false;
+
+            if (child.RemainingCount <= 0)
             {
-                if (parentHasCheck) ResetMemoAndDescendants(m);
+                // すでに 0 かつチェックありならリセット対象
+                if (childHasCheck) childResetFires = true;
             }
             else
             {
-                m.RemainingCount--;
-                if (m.RemainingCount == 0)
-                    ResetMemoAndDescendants(m);
+                child.RemainingCount--;
+                if (child.RemainingCount == 0) childResetFires = true;
             }
 
-            // ── 子レベルのリセット処理 ─────────────────────────────
-            // 孫の RemainingCount は「子のリセットが発火したとき」にのみ減算する。
-            // 子が日数を残している間は孫には手を付けない。
-            foreach (var child in m.Children)
+            if (childResetFires)
             {
-                bool childHasCheck = child.IsGroup
-                    ? child.Children.Any(gc => gc.IsChecked)
-                    : child.IsItemChecked;
+                // 子自身をリセット
+                child.IsItemChecked = false;
 
-                bool childResetFires = false;
-
-                if (child.RemainingCount <= 0)
+                // 孫は子のリセット発火時にのみ自身の RemainingCount を減算
+                foreach (var grandchild in child.Children)
                 {
-                    // すでに 0 かつチェックありならリセット対象
-                    if (childHasCheck) childResetFires = true;
-                }
-                else
-                {
-                    child.RemainingCount--;
-                    if (child.RemainingCount == 0) childResetFires = true;
-                }
-
-                if (childResetFires)
-                {
-                    // 子自身をリセット
-                    child.IsItemChecked = false;
-
-                    // 孫は子のリセット発火時にのみ自身の RemainingCount を減算
-                    foreach (var grandchild in child.Children)
+                    if (grandchild.RemainingCount <= 0)
                     {
-                        if (grandchild.RemainingCount <= 0)
-                        {
-                            if (grandchild.IsItemChecked)
-                                grandchild.IsItemChecked = false;
-                        }
-                        else
-                        {
-                            grandchild.RemainingCount--;
-                            if (grandchild.RemainingCount == 0)
-                                grandchild.IsItemChecked = false;
-                        }
+                        if (grandchild.IsItemChecked)
+                            grandchild.IsItemChecked = false;
                     }
-                    child.UpdateStatusFromChildren();
+                    else
+                    {
+                        grandchild.RemainingCount--;
+                        if (grandchild.RemainingCount == 0)
+                            grandchild.IsItemChecked = false;
+                    }
                 }
+                child.UpdateStatusFromChildren();
             }
-            m.UpdateStatusFromChildren();
         }
-        AppStateService.Save(_state);
+        m.UpdateStatusFromChildren();
     }
 
     private static void ResetChildAndDescendants(MemoItem child)
@@ -487,16 +516,30 @@ public partial class MainWindow : Window
         new SettingsWindow(_state).ShowDialog();
         TimerPanel.ItemsSource = null;
         TimerPanel.ItemsSource = _state.Timers;
-        _lastKnownUpdateTime = GetCurrentUpdateTime(DateTime.Now);
+        ResyncResetBoundaries();
         UpdateRemainingDisplay();
+        ApplyTopmostRowVisibility();
         AppStateService.Save(_state);
     }
 
-    private void OpenTimerSettings(object sender, RoutedEventArgs e)
+    // ─── 現在時刻表示・最前面固定 ─────────────────────────────────
+
+    private void ApplyTopmostRowVisibility()
     {
-        new TimerSettingsWindow(_state) { Owner = this }.ShowDialog();
-        TimerPanel.ItemsSource = null;
-        TimerPanel.ItemsSource = _state.Timers;
+        TopmostRow.Visibility = _state.EnableTopmostFeature ? Visibility.Visible : Visibility.Collapsed;
+        AlwaysOnTopCheckBox.IsChecked = _state.IsAlwaysOnTop;
+        ApplyTopmostEffective();
+    }
+
+    private void ApplyTopmostEffective()
+    {
+        Topmost = _state.EnableTopmostFeature && _state.IsAlwaysOnTop;
+    }
+
+    private void AlwaysOnTopChanged(object sender, RoutedEventArgs e)
+    {
+        _state.IsAlwaysOnTop = AlwaysOnTopCheckBox.IsChecked ?? false;
+        ApplyTopmostEffective();
         AppStateService.Save(_state);
     }
 
@@ -571,6 +614,14 @@ public partial class MainWindow : Window
         {
             var inputWin = new TimerInputWindow(tc.Name, timerMode: TimerInputMode.Recovery,
                 recoveryIntervalSeconds: tc.RecoveryIntervalSeconds) { Owner = this };
+            if (inputWin.ShowDialog() != true) return;
+            totalSeconds = inputWin.InputSeconds;
+            tc.CurrentSetMinutes = totalSeconds / 60;
+        }
+        else if (tc.IsFullRecoveryMode)
+        {
+            var inputWin = new TimerInputWindow(tc.Name, timerMode: TimerInputMode.FullRecovery,
+                recoveryIntervalSeconds: tc.RecoveryIntervalSeconds, maxValue: tc.RecoveryMaxValue) { Owner = this };
             if (inputWin.ShowDialog() != true) return;
             totalSeconds = inputWin.InputSeconds;
             tc.CurrentSetMinutes = totalSeconds / 60;

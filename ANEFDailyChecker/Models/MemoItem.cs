@@ -98,6 +98,12 @@ public class MemoItem : INotifyPropertyChanged
     public Dictionary<int, string> DayOfWeekTexts { get; set; } = new();
 
     /// <summary>
+    /// 基準リセット時刻からのオフセット（分単位、-1439〜+1439）。
+    /// 親項目のみが使用し、子・孫は親のオフセットに準拠する。
+    /// </summary>
+    public int ResetOffsetMinutes { get; set; } = 0;
+
+    /// <summary>
     /// UseDayOfWeekMode が true で今日の曜日に対応するテキストがあればそれを返す。
     /// それ以外は Text を返す。
     /// </summary>

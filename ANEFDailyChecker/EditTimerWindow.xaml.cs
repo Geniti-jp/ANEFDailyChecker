@@ -13,17 +13,22 @@ public partial class EditTimerWindow : Window
     public EditTimerWindow(TimerConfig timer)
     {
         InitializeComponent();
+        if (Application.Current.MainWindow is Window mw && mw != this && mw.Topmost) Topmost = true;
+
         _timer = timer;
 
         NameBox.Text = timer.Name;
         MinutesBox.Text = timer.FixedMinutes.ToString();
         RecoveryIntervalBox.Text = FormatSeconds(timer.RecoveryIntervalSeconds);
+        MaxValueBox.Text = timer.RecoveryMaxValue.ToString();
         BuiltinSoundCheck.IsChecked = timer.UseBuiltinSound;
         SoundPathBox.Text = timer.SoundPath;
         RepeatCountBox.Text = timer.SoundRepeatCount.ToString();
 
         if (timer.IsFixedMode)
             FixedModeRadio.IsChecked = true;
+        else if (timer.IsFullRecoveryMode)
+            FullRecoveryModeRadio.IsChecked = true;
         else if (timer.IsRecoveryMode)
             RecoveryModeRadio.IsChecked = true;
         else
@@ -70,12 +75,15 @@ public partial class EditTimerWindow : Window
     {
         bool isFixed = FixedModeRadio.IsChecked ?? false;
         bool isRecovery = RecoveryModeRadio.IsChecked ?? false;
+        bool isFullRecovery = FullRecoveryModeRadio.IsChecked ?? false;
         bool useBuiltin = BuiltinSoundCheck.IsChecked ?? true;
 
         if (FixedTimePanel != null)
             FixedTimePanel.Visibility = isFixed ? Visibility.Visible : Visibility.Collapsed;
         if (RecoveryPanel != null)
-            RecoveryPanel.Visibility = isRecovery ? Visibility.Visible : Visibility.Collapsed;
+            RecoveryPanel.Visibility = (isRecovery || isFullRecovery) ? Visibility.Visible : Visibility.Collapsed;
+        if (MaxValuePanel != null)
+            MaxValuePanel.Visibility = isFullRecovery ? Visibility.Visible : Visibility.Collapsed;
         if (CustomSoundPanel != null)
             CustomSoundPanel.Visibility = useBuiltin ? Visibility.Collapsed : Visibility.Visible;
     }
@@ -103,6 +111,7 @@ public partial class EditTimerWindow : Window
 
         bool isFixed = FixedModeRadio.IsChecked ?? false;
         bool isRecovery = RecoveryModeRadio.IsChecked ?? false;
+        bool isFullRecovery = FullRecoveryModeRadio.IsChecked ?? false;
 
         if (isFixed)
         {
@@ -116,7 +125,7 @@ public partial class EditTimerWindow : Window
             _timer.FixedMinutes = mins;
         }
 
-        if (isRecovery)
+        if (isRecovery || isFullRecovery)
         {
             var sec = ParseTimeInput(RecoveryIntervalBox.Text);
             if (sec == null || sec < 1)
@@ -129,6 +138,18 @@ public partial class EditTimerWindow : Window
                 return;
             }
             _timer.RecoveryIntervalSeconds = sec.Value;
+        }
+
+        if (isFullRecovery)
+        {
+            if (!int.TryParse(MaxValueBox.Text, out int maxVal) || maxVal < 1)
+            {
+                MessageBox.Show("最大値は 1 以上の整数で入力してください。", "入力エラー",
+                    MessageBoxButton.OK, MessageBoxImage.Warning);
+                MaxValueBox.Focus(); MaxValueBox.SelectAll();
+                return;
+            }
+            _timer.RecoveryMaxValue = maxVal;
         }
 
         bool useBuiltin = BuiltinSoundCheck.IsChecked ?? true;
@@ -155,6 +176,7 @@ public partial class EditTimerWindow : Window
         _timer.Name = NameBox.Text.Trim();
         _timer.IsFixedMode = isFixed;
         _timer.IsRecoveryMode = isRecovery;
+        _timer.IsFullRecoveryMode = isFullRecovery;
         _timer.UseBuiltinSound = useBuiltin;
         _timer.SoundRepeatCount = repeat;
 
